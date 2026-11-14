@@ -58,17 +58,8 @@ struct TabSelectionView: View {
             }
         }
         .clipShape(Capsule())
-        .onAppear { fallBackIfHidden() }
-        .onChange(of: showClaudeTab) { fallBackIfHidden() }
-        .onChange(of: showFansTab) { fallBackIfHidden() }
-        .onChange(of: shelfEnabled) { fallBackIfHidden() }
     }
 
-    private func fallBackIfHidden() {
-        if !visibleTabs.contains(where: { $0.view == coordinator.currentView }) {
-            coordinator.currentView = .home
-        }
-    }
 }
 
 #Preview {
