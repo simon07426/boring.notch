@@ -48,6 +48,7 @@ enum SensorReader {
                   let event = copyEventFn(service, kIOHIDEventTypeTemperature, 0, 0)?.takeRetainedValue()
             else { continue }
             let celsius = floatValueFn(event, Int32(kIOHIDEventTypeTemperature << 16))
+            guard celsius.isFinite else { continue }
             readings.append(SensorReading(name: name, celsius: celsius))
         }
         return readings
@@ -101,21 +102,40 @@ enum SensorReader {
             return withUnsafeBytes(of: &bytes) { b in Int(UInt32(b[0]) << 24 | UInt32(b[1]) << 16 | UInt32(b[2]) << 8 | UInt32(b[3])) }
         }
 
-        var readings: [SensorReading] = []
-        for index in 0..<keyCount() {
-            var byIndex = SMCKeyData(); byIndex.data8 = 8; byIndex.data32 = UInt32(index)
-            guard let named = call(conn, byIndex) else { continue }
-            let name = fourCCString(named.key)
-            guard name.hasPrefix("Tg") else { continue }
-
-            var info = SMCKeyData(); info.key = named.key; info.data8 = 9
-            guard let i = call(conn, info), fourCCString(i.keyInfo.dataType) == "flt ", i.keyInfo.dataSize == 4 else { continue }
-            var read = SMCKeyData(); read.key = named.key; read.keyInfo.dataSize = i.keyInfo.dataSize; read.data8 = 5
-            guard let o = call(conn, read) else { continue }
+        /// Reads a `flt ` key; nil when missing, wrong type, or not finite.
+        func readFloat(_ key: UInt32) -> Double? {
+            var info = SMCKeyData(); info.key = key; info.data8 = 9
+            guard let i = call(conn, info), fourCCString(i.keyInfo.dataType) == "flt ", i.keyInfo.dataSize == 4 else { return nil }
+            var read = SMCKeyData(); read.key = key; read.keyInfo.dataSize = i.keyInfo.dataSize; read.data8 = 5
+            guard let o = call(conn, read) else { return nil }
             var bytes = o.bytes
-            let value = withUnsafeBytes(of: &bytes) { $0.loadUnaligned(as: Float.self) }
-            readings.append(SensorReading(name: "SMC \(name)", celsius: Double(value)))
+            let value = Double(withUnsafeBytes(of: &bytes) { $0.loadUnaligned(as: Float.self) })
+            return value.isFinite ? value : nil
         }
-        return readings
+
+        func discoverGpuKeys() -> [UInt32] {
+            var keys: [UInt32] = []
+            for index in 0..<keyCount() {
+                var byIndex = SMCKeyData(); byIndex.data8 = 8; byIndex.data32 = UInt32(index)
+                guard let named = call(conn, byIndex), fourCCString(named.key).hasPrefix("Tg"),
+                      readFloat(named.key) != nil else { continue }
+                keys.append(named.key)
+            }
+            return keys
+        }
+
+        if gpuKeys.isEmpty { gpuKeys = discoverGpuKeys() }
+        return gpuKeys.compactMap { key in
+            readFloat(key).map { SensorReading(name: "SMC \(fourCCString(key))", celsius: $0) }
+        }
+    }
+
+    /// `Tg**` flt keys, discovered once (enumerating ~2.4k SMC keys per poll is wasteful).
+    /// Only touched from the helper's sensor reads; guarded by a lock.
+    private static let gpuKeysLock = NSLock()
+    private static var _gpuKeys: [UInt32] = []
+    private static var gpuKeys: [UInt32] {
+        get { gpuKeysLock.lock(); defer { gpuKeysLock.unlock() }; return _gpuKeys }
+        set { gpuKeysLock.lock(); defer { gpuKeysLock.unlock() }; _gpuKeys = newValue }
     }
 }

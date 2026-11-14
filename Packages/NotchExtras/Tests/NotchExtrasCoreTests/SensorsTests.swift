@@ -42,4 +42,11 @@ final class SensorsTests: XCTestCase {
         let s = SensorMap.summarize([r("mystery", 30), r("mystery", 33)])
         XCTAssertEqual(s.extras, [r("mystery", 33)])
     }
+
+    func testNonFiniteDropped() {
+        let s = SensorMap.summarize([r("PMU tdie1", .nan), r("PMU tdie2", .infinity), r("SMC Tg0W", -.infinity), r("PMU tdie3", 44), r("mystery", .nan)])
+        XCTAssertEqual(s.cpu, 44)
+        XCTAssertNil(s.gpu)
+        XCTAssertTrue(s.extras.isEmpty)
+    }
 }

@@ -72,7 +72,7 @@ public enum SensorMap {
 
     public static func summarize(_ readings: [SensorReading]) -> SensorSummary {
         var best: [Category: Double] = [:]
-        for reading in readings where reading.celsius > 0 && reading.celsius < 130 {
+        for reading in readings where reading.celsius.isFinite && reading.celsius > 0 && reading.celsius < 130 {
             let c = category(of: reading.name)
             if c == .ignored { continue }
             best[c] = max(best[c] ?? -.infinity, reading.celsius)
