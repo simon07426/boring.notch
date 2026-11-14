@@ -5,7 +5,7 @@ import NotchExtrasCore
 import Security
 
 /// Loopback-only HTTP server the Claude Code hook talks to. Port is chosen by the system and
-/// published (with a random token) in `claude-bridge.json` inside Application Support.
+/// published (with a random token) in `~/.config/boring-notch/claude-bridge.json` (via the XPC helper).
 final class ClaudeBridgeServer: ObservableObject {
     static let shared = ClaudeBridgeServer()
 
@@ -13,7 +13,6 @@ final class ClaudeBridgeServer: ObservableObject {
 
     private let queue = DispatchQueue(label: "claude.bridge.server")
     private var listener: NWListener?
-    private var bridgeFileURL: URL?
 
     private static let requestReadTimeout: TimeInterval = 5
     private static let maxRequestBytes = 1_100_000
@@ -37,11 +36,13 @@ final class ClaudeBridgeServer: ObservableObject {
             switch state {
             case .ready:
                 guard let p = listener?.port?.rawValue else { return }
-                do {
-                    try self.writeBridgeFile(port: Int(p), token: token)
-                    DispatchQueue.main.async { self.port = Int(p) }
-                } catch {
-                    NSLog("ClaudeBridgeServer: could not write bridge file: \(error)")
+                DispatchQueue.main.async { self.port = Int(p) }
+                Task {
+                    guard let json = Self.bridgeJSON(port: Int(p), token: token),
+                          await XPCHelperClient.shared.writeClaudeBridgeFile(json) else {
+                        NSLog("ClaudeBridgeServer: helper could not write the bridge file; the hook will not find the app")
+                        return
+                    }
                 }
             case .failed(let error):
                 NSLog("ClaudeBridgeServer: listener failed: \(error)")
@@ -57,8 +58,20 @@ final class ClaudeBridgeServer: ObservableObject {
     func stop() {
         listener?.cancel()
         listener = nil
-        if let url = bridgeFileURL { try? FileManager.default.removeItem(at: url) }
-        bridgeFileURL = nil
+        // Best-effort removal called from applicationWillTerminate on the main thread. The XPC
+        // client hops to the main actor, so pump the run loop (at most 1 s) instead of blocking it.
+        final class Flag: @unchecked Sendable { var done = false }
+        let flag = Flag()
+        Task {
+            if !(await XPCHelperClient.shared.removeClaudeBridgeFile()) {
+                NSLog("ClaudeBridgeServer: helper could not remove the bridge file")
+            }
+            flag.done = true
+        }
+        let deadline = Date().addingTimeInterval(1)
+        while !flag.done && Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        }
         DispatchQueue.main.async { self.port = nil }
     }
 
@@ -104,27 +117,11 @@ final class ClaudeBridgeServer: ObservableObject {
         receive(Data())
     }
 
-    // MARK: - Bridge file
+    // MARK: - Bridge file (written by the unsandboxed XPC helper)
 
-    private func writeBridgeFile(port: Int, token: String) throws {
-        let fm = FileManager.default
-        let support = try fm.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let dir = support.appendingPathComponent("boringNotch", isDirectory: true)
-        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-
-        let final = dir.appendingPathComponent("claude-bridge.json")
-        let tmp = dir.appendingPathComponent(".claude-bridge.json.\(UUID().uuidString).tmp")
+    private static func bridgeJSON(port: Int, token: String) -> Data? {
         let payload: [String: Any] = ["port": port, "token": token, "pid": Int(ProcessInfo.processInfo.processIdentifier)]
-        let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
-
-        guard fm.createFile(atPath: tmp.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
-            throw CocoaError(.fileWriteUnknown)
-        }
-        if rename(tmp.path, final.path) != 0 {
-            try? fm.removeItem(at: tmp)
-            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
-        }
-        bridgeFileURL = final
+        return try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
     }
 
     private static func makeToken() throws -> String {

@@ -22,5 +22,8 @@ import Foundation
     func setScreenBrightness(_ value: Float, with reply: @escaping (Bool) -> Void)
     // Claude usage (token is read and used inside the helper only)
     func fetchClaudeUsage(with reply: @escaping (Data?, String?) -> Void)
+
+    func writeClaudeBridgeFile(_ json: Data, with reply: @escaping (Bool) -> Void)
+    func removeClaudeBridgeFile(with reply: @escaping (Bool) -> Void)
 }
 

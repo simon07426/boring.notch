@@ -111,6 +111,51 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
         }
     }
 
+    // MARK: - Claude bridge file (fixed path, outside the app sandbox container)
+
+    private static var bridgeDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/boring-notch", isDirectory: true)
+    }
+
+    private static var bridgeFile: URL {
+        bridgeDirectory.appendingPathComponent("claude-bridge.json")
+    }
+
+    @objc func writeClaudeBridgeFile(_ json: Data, with reply: @escaping (Bool) -> Void) {
+        let fm = FileManager.default
+        let dir = Self.bridgeDirectory
+        let tmp = dir.appendingPathComponent(".claude-bridge.json.\(UUID().uuidString).tmp")
+        do {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+            guard fm.createFile(atPath: tmp.path, contents: json, attributes: [.posixPermissions: 0o600]) else {
+                reply(false)
+                return
+            }
+            if rename(tmp.path, Self.bridgeFile.path) != 0 {
+                try? fm.removeItem(at: tmp)
+                reply(false)
+                return
+            }
+            reply(true)
+        } catch {
+            try? fm.removeItem(at: tmp)
+            reply(false)
+        }
+    }
+
+    @objc func removeClaudeBridgeFile(with reply: @escaping (Bool) -> Void) {
+        do {
+            try FileManager.default.removeItem(at: Self.bridgeFile)
+            reply(true)
+        } catch CocoaError.fileNoSuchFile {
+            reply(true)
+        } catch {
+            reply(false)
+        }
+    }
+
     // MARK: - Screen Brightness (moved from client app into helper)
 
     @objc func isScreenBrightnessAvailable(with reply: @escaping (Bool) -> Void) {

@@ -262,6 +262,36 @@ final class XPCHelperClient: NSObject {
             return .failure(.network)
         }
     }
+
+    nonisolated func writeClaudeBridgeFile(_ json: Data) async -> Bool {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            return try await service.withContinuation { service, continuation in
+                service.writeClaudeBridgeFile(json) { ok in
+                    continuation.resume(returning: ok)
+                }
+            }
+        } catch {
+            return false
+        }
+    }
+
+    nonisolated func removeClaudeBridgeFile() async -> Bool {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            return try await service.withContinuation { service, continuation in
+                service.removeClaudeBridgeFile { ok in
+                    continuation.resume(returning: ok)
+                }
+            }
+        } catch {
+            return false
+        }
+    }
 }
 
 extension Notification.Name {
