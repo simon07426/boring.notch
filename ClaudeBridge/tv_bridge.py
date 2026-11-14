@@ -270,10 +270,11 @@ def valid_answers(payload, answer):
             and all(isinstance(k, str) and isinstance(v, str) for k, v in answers.items()))
 
 
-def race(targets, payload, deadline, ids=None):
+def race(targets, payload, deadline, ids=None, on_posted=None):
     """Post the decision to every available target and poll them all; return the first real answer
     ({"status": "allow" | "deny" | "answer", "target": name, ...}) or None. The decision is deleted on every
-    other target. `ids` (name -> id) is filled in and ends up holding only decisions left standing."""
+    other target. `ids` (name -> id) is filled in and ends up holding only decisions left standing.
+    `on_posted(ids)` runs after posting and before polling, so the ids can be persisted while we wait."""
     ids = {} if ids is None else ids
     live = []
     for t in targets:
@@ -287,6 +288,11 @@ def race(targets, payload, deadline, ids=None):
             ids[t.name] = decision_id
             if not t.approvals_off:  # "answer on the Mac": the card stays up, the TV leaves the race
                 live.append(t)
+    if on_posted and ids:
+        try:
+            on_posted(dict(ids))
+        except Exception:  # noqa: BLE001 — persisting is best effort; the race still runs
+            pass
     result, lock, done = [], threading.Lock(), threading.Event()
     remaining = [len(live)]
 
@@ -300,6 +306,8 @@ def race(targets, payload, deadline, ids=None):
                 status = answer.get("status") if isinstance(answer, dict) else None
                 if status == "answer" and not valid_answers(payload, answer):
                     break  # never turn a malformed or misplaced answer into an allow
+                if status == "allow" and payload.get("kind") == "question":
+                    break  # a question is only ever answered with validated answers
                 if status in ("allow", "deny", "answer"):
                     with lock:
                         if not result:
@@ -456,12 +464,23 @@ def handle_permission(targets, data, state):
         payload = dict(kind="permission", question=question, command=command, explain=explain)
     payload.update(session=data.get("session_id"), project=project, step=step)
 
+    session = data.get("session_id")
+
+    def persist_pending(posted):
+        # Written before polling, so a later hook event (the prompt was answered in the terminal) can
+        # cancel_pending these decisions; the poll below then sees them gone and prints nothing.
+        save_json(state_path(session), {**state, "pending": posted})
+
     ids = {}
-    answer = race(targets, payload, time.time() + DECISION_WAIT_S, ids)
+    answer = race(targets, payload, time.time() + DECISION_WAIT_S, ids, on_posted=persist_pending)
+    # Other hook events may have saved the state file while we waited: build on that, not on our stale copy.
+    state.update(load_state(session))
     state["pending"] = ids or None  # what's left (e.g. the TV card that says "answer on the Mac")
     if not answer:
         return None
     if answer["status"] == "allow":
+        if payload["kind"] == "question":
+            return None  # defence in depth: race() already refuses this
         return permission_output("allow")
     if answer["status"] == "answer":
         return permission_output("allow", updated_input={**tin, "answers": answer.get("answers") or {}})

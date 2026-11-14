@@ -57,6 +57,9 @@ class Fake:
             def do_GET(self):
                 with fake.lock:
                     fake.polls += 1
+                    deleted = f"/decision/{urlparse(self.path).path.rsplit('/', 1)[-1]}" in fake.deletes
+                if deleted:  # like the real servers: a deleted decision is gone
+                    return self.reply(404, {})
                 if fake.poll == "pending":
                     time.sleep(0.2)
                     return self.reply(200, {"status": "pending"})
@@ -228,6 +231,33 @@ class BridgeTest(unittest.TestCase):
         self.assertEqual(tv.deletes, ["/decision/t9"])
         self.assertEqual(notch.deletes, ["/decision/n9"])
         self.assertIsNone(tv_bridge.load_state("s1")["pending"])
+
+    def test_pending_ids_persisted_while_polling_so_terminal_answer_cancels(self):
+        notch = self.notch(poll="pending")
+        tv_bridge.DECISION_WAIT_S = 10
+        result = {}
+        t = threading.Thread(target=lambda: result.setdefault("out", tv_bridge.handle_hook(dict(PERMISSION))))
+        start = time.time()
+        t.start()
+        # The ids must be on disk while the race is still polling.
+        while tv_bridge.load_state("s1").get("pending") != {"notch": "notch-1"}:
+            self.assertLess(time.time() - start, 3, "pending ids never persisted before polling")
+            time.sleep(0.05)
+        self.assertTrue(t.is_alive())
+        # Answered in the terminal: the next hook event cancels the decision.
+        tv_bridge.handle_hook({"hook_event_name": "PostToolUse", "session_id": "s1", "cwd": "/nonexistent",
+                               "tool_name": "Bash", "tool_input": {"command": "ls"}})
+        self.assertEqual(notch.deletes, ["/decision/notch-1"])
+        t.join(3)
+        self.assertFalse(t.is_alive(), "the in-flight poll did not end after the decision was deleted")
+        self.assertLess(time.time() - start, 4)
+        self.assertIsNone(result["out"])  # gone is never an allow
+        self.assertIsNone(tv_bridge.load_state("s1")["pending"])
+
+    def test_allow_on_question_prints_nothing(self):
+        self.notch(poll="allow")
+        data = {**PERMISSION, "tool_name": "AskUserQuestion", "tool_input": {"questions": [{"question": "Which?"}]}}
+        self.assertIsNone(tv_bridge.handle_hook(data))
 
 
 if __name__ == "__main__":
