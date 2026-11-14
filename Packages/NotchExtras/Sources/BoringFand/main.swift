@@ -75,13 +75,21 @@ final class FanController {
         return err
     }
 
+    /// Highest rpm we offer or write. Observed firmware quirk: a target at or very near the SMC Mx
+    /// (6800 / 6799 here) is accepted but the fans spin DOWN to 0. Mx - 100 is the highest proven value.
+    /// If that would fall below Mn, Mn is the top.
+    static func usableMax(min lo: Double, max hi: Double) -> Double {
+        Swift.max(hi - 100, lo)
+    }
+
     func status() -> FanStatus {
         FanStatus(fans: (0..<fanCount).map { i in
             FanInfo(
                 index: i,
                 actual: smc.readFloat("F\(i)Ac") ?? 0,
                 min: smc.readFloat("F\(i)Mn") ?? 0,
-                max: smc.readFloat("F\(i)Mx") ?? 0,
+                // Reported max is the usable max (see usableMax: targets near Mx stop the fans).
+                max: smc.readFloat("F\(i)Mx").map { Self.usableMax(min: smc.readFloat("F\(i)Mn") ?? 0, max: $0) } ?? 0,
                 target: smc.readFloat("F\(i)Tg") ?? 0,
                 manual: modeKeys[i].flatMap { smc.readByte($0) } == 1
             )
@@ -99,7 +107,8 @@ final class FanController {
                 autoWithRetry()
                 return "fan \(i): cannot read range"
             }
-            let target = Swift.min(Swift.max(rpm, lo), hi)
+            // Clamp to [Mn, Mx - 100]: targets at/near Mx make the firmware stop the fans.
+            let target = Swift.min(Swift.max(rpm, lo), Self.usableMax(min: lo, max: hi))
             // The mode write can be refused for a moment after a mode change: bounded retry.
             var modeErr: String? = "unattempted"
             while true {
