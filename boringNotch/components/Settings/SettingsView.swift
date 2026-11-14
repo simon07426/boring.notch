@@ -51,6 +51,9 @@ struct SettingsView: View {
                 NavigationLink(value: "Shelf") {
                     Label("Shelf", systemImage: "books.vertical")
                 }
+                NavigationLink(value: "Claude") {
+                    Label("Claude", systemImage: "sparkle")
+                }
                 NavigationLink(value: "Shortcuts") {
                     Label("Shortcuts", systemImage: "keyboard")
                 }
@@ -85,6 +88,8 @@ struct SettingsView: View {
                     Charge()
                 case "Shelf":
                     Shelf()
+                case "Claude":
+                    ClaudeSettings()
                 case "Shortcuts":
                     Shortcuts()
                 case "Extensions":
@@ -906,6 +911,23 @@ struct About: View {
             CheckForUpdatesView(updater: updaterController.updater)
         }
         .navigationTitle("About")
+    }
+}
+
+struct ClaudeSettings: View {
+    var body: some View {
+        Form {
+            Section {
+                Defaults.Toggle(key: .showClaudeTab) { Text("Show Claude tab") }
+                Defaults.Toggle(key: .claudeDecisionPopup) { Text("Show decision pop-up") }
+                Defaults.Toggle(key: .claudePopupWhenFrontmost) { Text("Show pop-up even when Claude is in front") }
+                Defaults.Toggle(key: .showFansTab) { Text("Show Fans tab") } // temporary; moves in Task 13
+            } header: {
+                Text("Claude")
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Claude")
     }
 }
 

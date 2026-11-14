@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CA0000012F00000100000001 /* ClaudeUsageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0000022F00000100000001 /* ClaudeUsageManager.swift */; };
+		CA0000012F00000100000002 /* ClaudeUsageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0000022F00000100000002 /* ClaudeUsageView.swift */; };
 		7A1C0DE02F1A000400A1B2C3 /* NotchExtrasCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7A1C0DE02F1A000200A1B2C3 /* NotchExtrasCore */; };
 		7A1C0DE02F1A000500A1B2C3 /* NotchExtrasCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7A1C0DE02F1A000300A1B2C3 /* NotchExtrasCore */; };
 		1100290C2E847E2800035A57 /* NSItemProvider+LoadHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100290B2E847E2800035A57 /* NSItemProvider+LoadHelpers.swift */; };
@@ -183,6 +185,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		CA0000022F00000100000001 /* ClaudeUsageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeUsageManager.swift; sourceTree = "<group>"; };
+		CA0000022F00000100000002 /* ClaudeUsageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeUsageView.swift; sourceTree = "<group>"; };
 		1100290B2E847E2800035A57 /* NSItemProvider+LoadHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSItemProvider+LoadHelpers.swift"; sourceTree = "<group>"; };
 		110029262E84FD4C00035A57 /* TemporaryFileStorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemporaryFileStorageService.swift; sourceTree = "<group>"; };
 		110029292E8691B400035A57 /* FileShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileShareView.swift; sourceTree = "<group>"; };
@@ -361,6 +365,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		CA0000032F00000100000001 /* Claude */ = {
+			isa = PBXGroup;
+			children = (
+				CA0000022F00000100000002 /* ClaudeUsageView.swift */,
+			);
+			path = Claude;
+			sourceTree = "<group>";
+		};
 		1113ABB82E80E27000EC13B2 /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -490,6 +502,7 @@
 		1471639B2C5D362F0068B555 /* components */ = {
 			isa = PBXGroup;
 			children = (
+				CA0000032F00000100000001 /* Claude */,
 				B141C23B2CA5F50900AC8CC8 /* Onboarding */,
 				B1C448992C97375A001F0858 /* Tips */,
 				14C08BB72C8DE49E000F8AA0 /* Calendar */,
@@ -514,6 +527,7 @@
 		147163B52C5D804B0068B555 /* managers */ = {
 			isa = PBXGroup;
 			children = (
+				CA0000022F00000100000001 /* ClaudeUsageManager.swift */,
 				11D58EA12E760AE100FA8377 /* ImageService.swift */,
 				F38DE6472D8243E2008B5C6D /* BatteryActivityManager.swift */,
 				112FB7342CCF16F70015238C /* NotchSpaceManager.swift */,
@@ -994,6 +1008,8 @@
 				1471A8592C6281BD0058408D /* BoringNotchWindow.swift in Sources */,
 				14CEF4182C5CAED300855D72 /* ContentView.swift in Sources */,
 				9A987A0D2C73CA66005CA465 /* ShelfView.swift in Sources */,
+				CA0000012F00000100000001 /* ClaudeUsageManager.swift in Sources */,
+				CA0000012F00000100000002 /* ClaudeUsageView.swift in Sources */,
 				1132E5142E777B920068732D /* YouTubeMusicNetworking.swift in Sources */,
 				1132E5122E777B6E0068732D /* YouTubeMusicModels.swift in Sources */,
 				11CFC65F2E097F2F00748C80 /* OnboardingView.swift in Sources */,

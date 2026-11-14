@@ -280,6 +280,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if Defaults[.showClaudeTab] {
+            Task { @MainActor in ClaudeUsageManager.shared.start() }
+        }
 
         NotificationCenter.default.addObserver(
             self,

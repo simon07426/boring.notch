@@ -5,6 +5,7 @@
 //  Created by Hugo Persson on 2024-08-25.
 //
 
+import Defaults
 import SwiftUI
 
 struct TabModel: Identifiable {
@@ -14,17 +15,20 @@ struct TabModel: Identifiable {
     let view: NotchViews
 }
 
-let tabs = [
-    TabModel(label: "Home", icon: "house.fill", view: .home),
-    TabModel(label: "Shelf", icon: "tray.fill", view: .shelf)
-]
+var visibleTabs: [TabModel] {
+    var tabs = [TabModel(label: "Home", icon: "house.fill", view: .home)]
+    if Defaults[.boringShelf] { tabs.append(TabModel(label: "Shelf", icon: "tray.fill", view: .shelf)) }
+    if Defaults[.showClaudeTab] { tabs.append(TabModel(label: "Claude", icon: "sparkle", view: .claude)) }
+    if Defaults[.showFansTab] { tabs.append(TabModel(label: "Fans", icon: "fan", view: .fans)) }
+    return tabs
+}
 
 struct TabSelectionView: View {
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     @Namespace var animation
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(tabs) { tab in
+            ForEach(visibleTabs) { tab in
                     TabButton(label: tab.label, icon: tab.icon, selected: coordinator.currentView == tab.view) {
                         withAnimation(.smooth) {
                             coordinator.currentView = tab.view
@@ -47,6 +51,16 @@ struct TabSelectionView: View {
             }
         }
         .clipShape(Capsule())
+        .onAppear { fallBackIfHidden() }
+        .onChange(of: Defaults[.showClaudeTab]) { fallBackIfHidden() }
+        .onChange(of: Defaults[.showFansTab]) { fallBackIfHidden() }
+        .onChange(of: Defaults[.boringShelf]) { fallBackIfHidden() }
+    }
+
+    private func fallBackIfHidden() {
+        if !visibleTabs.contains(where: { $0.view == coordinator.currentView }) {
+            coordinator.currentView = .home
+        }
     }
 }
 
