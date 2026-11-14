@@ -9,6 +9,7 @@ import Foundation
 import ApplicationServices
 import IOKit
 import CoreGraphics
+import NotchExtrasCore
 
 class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
     
@@ -99,6 +100,17 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
     @objc func setKeyboardBrightness(_ value: Float, with reply: @escaping (Bool) -> Void) {
         reply(Self.keyboardClient.setBrightness(value))
     }
+    // MARK: - Claude usage
+
+    @objc func fetchClaudeUsage(with reply: @escaping (Data?, String?) -> Void) {
+        Task {
+            switch await ClaudeUsageFetcher.fetch() {
+            case .success(let data): reply(data, nil)
+            case .failure(let error): reply(nil, error.rawValue)
+            }
+        }
+    }
+
     // MARK: - Screen Brightness (moved from client app into helper)
 
     @objc func isScreenBrightnessAvailable(with reply: @escaping (Bool) -> Void) {

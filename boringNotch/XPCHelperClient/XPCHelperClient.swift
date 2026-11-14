@@ -1,6 +1,7 @@
 import Foundation
 import Cocoa
 import AsyncXPCConnection
+import NotchExtrasCore
 
 final class XPCHelperClient: NSObject {
     nonisolated static let shared = XPCHelperClient()
@@ -239,6 +240,26 @@ final class XPCHelperClient: NSObject {
             }
         } catch {
             return false
+        }
+    }
+
+    nonisolated func fetchClaudeUsage() async -> Result<Data, UsageFetchError> {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            let result: Result<Data, UsageFetchError> = try await service.withContinuation { service, continuation in
+                service.fetchClaudeUsage { data, errorCode in
+                    if let data {
+                        continuation.resume(returning: .success(data))
+                    } else {
+                        continuation.resume(returning: .failure(errorCode.flatMap(UsageFetchError.init(rawValue:)) ?? .badResponse))
+                    }
+                }
+            }
+            return result
+        } catch {
+            return .failure(.network)
         }
     }
 }
