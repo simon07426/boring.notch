@@ -263,6 +263,23 @@ final class XPCHelperClient: NSObject {
         }
     }
 
+    nonisolated func readSensors() async -> [SensorReading] {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            let data: Data? = try await service.withContinuation { service, continuation in
+                service.readSensors { data in
+                    continuation.resume(returning: data)
+                }
+            }
+            guard let data else { return [] }
+            return (try? JSONDecoder().decode([SensorReading].self, from: data)) ?? []
+        } catch {
+            return []
+        }
+    }
+
     nonisolated func writeClaudeBridgeFile(_ json: Data) async -> Bool {
         do {
             let service = await MainActor.run {

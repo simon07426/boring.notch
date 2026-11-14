@@ -111,6 +111,12 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
         }
     }
 
+    // MARK: - Temperature sensors
+
+    @objc func readSensors(with reply: @escaping (Data?) -> Void) {
+        reply(try? JSONEncoder().encode(SensorReader.read()))
+    }
+
     // MARK: - Claude bridge file (fixed path, outside the app sandbox container)
 
     private static var bridgeDirectory: URL {
