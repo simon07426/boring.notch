@@ -44,6 +44,9 @@ final class FanController {
 
     func touch() { watchdog.touch(at: monotonicNow()) }
 
+    /// Fan state unknown (an auto revert failed): treat as manual so the watchdog keeps reverting.
+    func markManual() { manual = true }
+
     func revertIfStale() {
         if watchdog.shouldRevert(now: monotonicNow(), manual: manual) {
             log("watchdog: no heartbeat, reverting to auto")
@@ -240,12 +243,14 @@ if geteuid() != 0 { log("warning: not running as root, SMC writes will fail") }
 guard let smc = SMC() else { fail("cannot open AppleSMC") }
 
 let fans = FanController(smc: smc)
-if let err = fans.auto() { log("startup auto failed: \(err)") }
+// A failed startup revert must not leave the fans stuck in manual: mark them manual so the
+// 1 s watchdog keeps retrying auto until it succeeds.
+if fans.autoWithRetry() != nil { fans.markManual() }
 
 // MARK: - Run loop wiring (all on the main queue)
 
 func shutdown() -> Never {
-    _ = fans.auto()
+    fans.autoWithRetry()
     unlink(socketPath)
     exit(0)
 }
