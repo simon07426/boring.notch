@@ -49,6 +49,8 @@ struct ContentView: View {
 
     /// Only one notch window reacts to a decision: the screen with a notch, else the main screen.
     private var isDecisionTargetScreen: Bool {
+        // A lone notch window always shows the pop-up, wherever it lives.
+        if NSApp.windows.filter({ $0 is BoringNotchWindow }).count <= 1 { return true }
         let target = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main
         guard let target, let uuid = vm.screenUUID else { return true }
         return NSScreen.screen(withUUID: uuid) == target

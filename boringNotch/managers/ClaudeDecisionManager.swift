@@ -19,6 +19,7 @@ final class ClaudeDecisionManager: ObservableObject {
     @Published private(set) var queuedCount: Int = 0
     @Published private(set) var lastDecisionAt: Date?
 
+    private static let pendingLifetime: TimeInterval = 150
     private static let resolvedRetention: TimeInterval = 300
     private static let claudeDesktopBundleID = "com.anthropic.claudefordesktop"
 
@@ -36,26 +37,27 @@ final class ClaudeDecisionManager: ObservableObject {
         }
         evictionTask = Task { [store] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(60))
+                try? await Task.sleep(for: .seconds(10))
+                await store.expirePending(olderThan: Self.pendingLifetime)
                 await store.evictResolved(olderThan: Self.resolvedRetention)
             }
         }
     }
 
-    func allow() { resolveCurrent(.allow) }
-    func deny() { resolveCurrent(.deny) }
-    func answer(_ answers: [String: String]) { resolveCurrent(.answered(answers)) }
+    // Actions are bound to the decision id the view rendered; a stale id is a no-op in the store.
+    func allow(id: String) { resolve(id, .allow) }
+    func deny(id: String) { resolve(id, .deny) }
+    func answer(id: String, _ answers: [String: String]) { resolve(id, .answered(answers)) }
 
     /// Give the decision back to Claude's own prompt and bring Claude to the front.
-    func handBack() {
-        resolveCurrent(.withdrawn)
+    func handBack(id: String) {
+        resolve(id, .withdrawn)
         if let app = NSRunningApplication.runningApplications(withBundleIdentifier: Self.claudeDesktopBundleID).first {
             app.activate()
         }
     }
 
-    private func resolveCurrent(_ status: DecisionStatus) {
-        guard let id = current?.id else { return }
+    private func resolve(_ id: String, _ status: DecisionStatus) {
         Task { await store.resolve(id, status) }
     }
 

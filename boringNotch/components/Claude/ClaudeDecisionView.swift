@@ -19,14 +19,14 @@ struct ClaudeDecisionHost: View {
             } else if let decision = shown ?? manager.current {
                 if decision.request.kind == .question, let questions = decision.request.questions, !questions.isEmpty {
                     ClaudeQuestionView(decision: decision, questions: questions, queuedCount: manager.queuedCount,
-                                       onAnswer: { answers in send { manager.answer(answers) } },
-                                       onHandBack: { manager.handBack() })
+                                       onAnswer: { answers in send { manager.answer(id: decision.id, answers) } },
+                                       onHandBack: { manager.handBack(id: decision.id) })
                         .id(decision.id)
                 } else {
                     ClaudePermissionView(decision: decision, queuedCount: manager.queuedCount,
-                                         onAllow: { send { manager.allow() } },
-                                         onDeny: { send { manager.deny() } },
-                                         onHandBack: { manager.handBack() })
+                                         onAllow: { send { manager.allow(id: decision.id) } },
+                                         onDeny: { send { manager.deny(id: decision.id) } },
+                                         onHandBack: { manager.handBack(id: decision.id) })
                         .id(decision.id)
                 }
             }

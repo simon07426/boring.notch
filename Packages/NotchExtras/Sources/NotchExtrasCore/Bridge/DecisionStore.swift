@@ -5,6 +5,7 @@ public actor DecisionStore {
         let request: DecisionRequest
         var status: DecisionStatus = .pending
         var resolvedAt: Date?
+        let createdAt: Date
     }
 
     private struct Waiter {
@@ -36,19 +37,19 @@ public actor DecisionStore {
     }
 
     @discardableResult
-    public func add(_ r: DecisionRequest) -> String {
+    public func add(_ r: DecisionRequest, now: Date = Date()) -> String {
         let id = UUID().uuidString.lowercased()
-        entries[id] = Entry(request: r)
+        entries[id] = Entry(request: r, createdAt: now)
         order.append(id)
         changeContinuation.yield()
         return id
     }
 
     /// First answer wins: resolving an already-resolved or unknown decision is a no-op.
-    public func resolve(_ id: String, _ s: DecisionStatus) {
+    public func resolve(_ id: String, _ s: DecisionStatus, now: Date = Date()) {
         guard s != .pending, entries[id]?.status == .pending else { return }
         entries[id]?.status = s
-        entries[id]?.resolvedAt = Date()
+        entries[id]?.resolvedAt = now
         wake(id, with: s)
         changeContinuation.yield()
     }
@@ -59,6 +60,15 @@ public actor DecisionStore {
         order.removeAll { $0 == id }
         wake(id, with: .gone)
         changeContinuation.yield()
+    }
+
+    /// The hook is gone (killed at its timeout) if a decision is still pending after `age`: treat it as withdrawn.
+    public func expirePending(olderThan age: TimeInterval, now: Date = Date()) {
+        let stale = order.filter { id in
+            guard let e = entries[id], e.status == .pending else { return false }
+            return now.timeIntervalSince(e.createdAt) > age
+        }
+        for id in stale { resolve(id, .withdrawn, now: now) }
     }
 
     /// Drops resolved decisions that were resolved more than `olderThan` seconds before `now`.

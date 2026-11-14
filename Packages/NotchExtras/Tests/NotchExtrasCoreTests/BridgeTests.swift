@@ -211,6 +211,30 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(p, .pending)
     }
 
+    func testStalePendingExpiresAsWithdrawnThenEvicts() async {
+        let store = DecisionStore()
+        let t0 = Date()
+        let old = await store.add(permission(), now: t0)
+        let fresh = await store.add(permission("s2"), now: t0.addingTimeInterval(100))
+        await store.expirePending(olderThan: 150, now: t0.addingTimeInterval(149))
+        var s = await store.status(old)
+        XCTAssertEqual(s, .pending)
+        await store.expirePending(olderThan: 150, now: t0.addingTimeInterval(151))
+        s = await store.status(old)
+        XCTAssertEqual(s, .withdrawn)
+        s = await store.status(fresh)
+        XCTAssertEqual(s, .pending)
+        let ids = await store.pending.map(\.id)
+        XCTAssertEqual(ids, [fresh])
+        // A late allow for the expired decision is a no-op.
+        await store.resolve(old, .allow)
+        s = await store.status(old)
+        XCTAssertEqual(s, .withdrawn)
+        await store.evictResolved(olderThan: 300, now: t0.addingTimeInterval(151 + 301))
+        s = await store.status(old)
+        XCTAssertEqual(s, .gone)
+    }
+
     // MARK: - PopupTracker
 
     func testQueuedDecisionPopsWhenPreviousResolvedElsewhere() {
