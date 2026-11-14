@@ -101,6 +101,8 @@ class Tv:
         self.base = f"http://{config['host']}:{config.get('port', PORT)}/claude"
 
     def call(self, method, path, body=None, timeout=EVENT_TIMEOUT_S):
+        if self.base is None:
+            return None
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(self.base + path, data=data, method=method)
         req.add_header("Content-Type", "application/json")
@@ -202,7 +204,7 @@ class TvTarget(Target):
     def delete(self, decision_id):
         try:
             self.tv.call("DELETE", f"/decision/{decision_id}")
-        except TvDown:
+        except (TvDown, AttributeError):
             pass
 
     def event(self, **fields):
@@ -261,6 +263,13 @@ class NotchTarget(Target):
         self.request("DELETE", f"/decision/{decision_id}")
 
 
+def valid_answers(payload, answer):
+    """An answer counts only for a question, with a non-empty dict of string -> string."""
+    answers = answer.get("answers")
+    return (payload.get("kind") == "question" and isinstance(answers, dict) and bool(answers)
+            and all(isinstance(k, str) and isinstance(v, str) for k, v in answers.items()))
+
+
 def race(targets, payload, deadline, ids=None):
     """Post the decision to every available target and poll them all; return the first real answer
     ({"status": "allow" | "deny" | "answer", "target": name, ...}) or None. The decision is deleted on every
@@ -270,8 +279,11 @@ def race(targets, payload, deadline, ids=None):
     for t in targets:
         if not t.available():
             continue
-        decision_id = t.post_decision(payload)
-        if decision_id:
+        try:
+            decision_id = t.post_decision(payload)
+        except Exception:  # noqa: BLE001 — a failing target drops out; the others continue
+            continue
+        if decision_id and isinstance(decision_id, str):
             ids[t.name] = decision_id
             if not t.approvals_off:  # "answer on the Mac": the card stays up, the TV leaves the race
                 live.append(t)
@@ -285,7 +297,9 @@ def race(targets, payload, deadline, ids=None):
                 if left <= 0:
                     break
                 answer = t.poll(ids[t.name], max(1, min(55, int(left))))
-                status = (answer or {}).get("status")
+                status = answer.get("status") if isinstance(answer, dict) else None
+                if status == "answer" and not valid_answers(payload, answer):
+                    break  # never turn a malformed or misplaced answer into an allow
                 if status in ("allow", "deny", "answer"):
                     with lock:
                         if not result:
@@ -314,7 +328,10 @@ def race(targets, payload, deadline, ids=None):
         if winner and t.name == winner["target"]:
             del ids[t.name]
         elif winner or t in live:
-            t.delete(ids.pop(t.name))
+            try:
+                t.delete(ids.pop(t.name))
+            except Exception:  # noqa: BLE001
+                pass
     return winner
 
 
@@ -392,9 +409,13 @@ def cancel_pending(targets, state):
     pending = state.get("pending")
     if isinstance(pending, str):  # state written before multi-target
         pending = {"tv": pending}
-    for t in targets:
-        if pending and pending.get(t.name):
-            t.delete(pending[t.name])
+    if isinstance(pending, dict):
+        for t in targets:
+            try:
+                if pending.get(t.name) and t.available():
+                    t.delete(pending[t.name])
+            except Exception:  # noqa: BLE001 — cleanup must never break the hook
+                pass
     state["pending"] = None
 
 

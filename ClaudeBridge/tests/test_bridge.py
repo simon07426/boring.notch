@@ -193,6 +193,34 @@ class BridgeTest(unittest.TestCase):
         self.notch(poll="withdrawn")
         self.assertIsNone(tv_bridge.handle_hook(dict(PERMISSION)))
 
+    def test_answer_without_answers_is_not_allow(self):
+        for answers in (None, {}, {"Which?": 1}):
+            self.notch(poll="answer", answers=answers)
+            data = {**PERMISSION, "tool_name": "AskUserQuestion", "tool_input": {"questions": [{"question": "Which?"}]}}
+            self.assertIsNone(tv_bridge.handle_hook(data), answers)
+
+    def test_answer_on_permission_prompt_is_not_allow(self):
+        self.notch(poll="answer", answers={"Which?": "A"})
+        self.assertIsNone(tv_bridge.handle_hook(dict(PERMISSION)))
+
+    def test_cancel_pending_with_no_bridge_file_does_not_raise(self):
+        state = {"tasks": [], "pending": {"tv": "t9", "notch": "n9"}}
+        tv_bridge.cancel_pending([tv_bridge.NotchTarget()], state)
+        self.assertIsNone(state["pending"])
+        tv_bridge.save_json(tv_bridge.state_path("s1"), {"tasks": [], "pending": {"notch": "n9"}})
+        self.assertIsNone(tv_bridge.handle_hook({"hook_event_name": "Stop", "session_id": "s1", "cwd": "/nonexistent"}))
+
+    def test_target_returning_json_list_drops_out(self):
+        f = Fake(token="notchtok")
+        f.server.RequestHandlerClass.reply = lambda h, code, body=None: (
+            h.send_response(201), h.send_header("Content-Length", "2"), h.end_headers(), h.wfile.write(b"[]"))
+        self.fakes.append(f)
+        self.bridge_file(f.port)
+        self.tv(poll="allow")
+        out = tv_bridge.handle_hook(dict(PERMISSION))
+        self.assertEqual(out["hookSpecificOutput"]["decision"], {"behavior": "allow"})
+        self.assertTrue(tv_bridge.state_path("s1").exists())
+
     def test_other_event_cancels_pending_on_all_targets(self):
         tv, notch = self.tv(), self.notch()
         tv_bridge.save_json(tv_bridge.state_path("s1"), {"tasks": [], "pending": {"tv": "t9", "notch": "n9"}})
