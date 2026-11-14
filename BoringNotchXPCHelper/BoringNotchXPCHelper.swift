@@ -117,6 +117,42 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
         reply(try? JSONEncoder().encode(SensorReader.read()))
     }
 
+    // MARK: - Fan daemon
+
+    @objc func fanCommand(_ line: String, with reply: @escaping (String?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            reply(FanDaemonClient.send(line))
+        }
+    }
+
+    @objc func isFanDaemonInstalled(with reply: @escaping (Bool) -> Void) {
+        reply(FanDaemonInstaller.isInstalled())
+    }
+
+    @objc func installFanDaemon(_ resourcesPath: String, with reply: @escaping (Bool, String?) -> Void) {
+        switch FanDaemonInstaller.installScript(resourcesPath: resourcesPath, uid: getuid()) {
+        case .failure(let error):
+            reply(false, error.message)
+        case .success(let script):
+            // NSAppleScript wants the main thread; the helper's main run loop serves XPC.
+            DispatchQueue.main.async {
+                let result = FanDaemonInstaller.runPrivileged(script)
+                reply(result.ok, result.message)
+            }
+        }
+    }
+
+    @objc func uninstallFanDaemon(with reply: @escaping (Bool, String?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Best effort: return the fans to auto before the daemon goes away.
+            _ = FanDaemonClient.send("auto")
+            DispatchQueue.main.async {
+                let result = FanDaemonInstaller.runPrivileged(FanDaemonInstaller.uninstallScript())
+                reply(result.ok, result.message)
+            }
+        }
+    }
+
     // MARK: - Claude bridge file (fixed path, outside the app sandbox container)
 
     private static var bridgeDirectory: URL {
