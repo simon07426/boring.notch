@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CA0000012F0000010000000D /* ClaudeQuestionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0000022F0000010000000D /* ClaudeQuestionView.swift */; };
+		CA0000012F0000010000000C /* ClaudeDecisionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0000022F0000010000000C /* ClaudeDecisionView.swift */; };
 		CA0000012F0000010000000A /* ClaudeBridgeServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0000022F0000010000000A /* ClaudeBridgeServer.swift */; };
 		CA0000012F0000010000000B /* ClaudeDecisionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0000022F0000010000000B /* ClaudeDecisionManager.swift */; };
 		CA0000012F00000100000001 /* ClaudeUsageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0000022F00000100000001 /* ClaudeUsageManager.swift */; };
@@ -187,6 +189,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		CA0000022F0000010000000D /* ClaudeQuestionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeQuestionView.swift; sourceTree = "<group>"; };
+		CA0000022F0000010000000C /* ClaudeDecisionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeDecisionView.swift; sourceTree = "<group>"; };
 		CA0000022F0000010000000A /* ClaudeBridgeServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeBridgeServer.swift; sourceTree = "<group>"; };
 		CA0000022F0000010000000B /* ClaudeDecisionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeDecisionManager.swift; sourceTree = "<group>"; };
 		CA0000022F00000100000001 /* ClaudeUsageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeUsageManager.swift; sourceTree = "<group>"; };
@@ -373,6 +377,8 @@
 			isa = PBXGroup;
 			children = (
 				CA0000022F00000100000002 /* ClaudeUsageView.swift */,
+				CA0000022F0000010000000D /* ClaudeQuestionView.swift */,
+				CA0000022F0000010000000C /* ClaudeDecisionView.swift */,
 			);
 			path = Claude;
 			sourceTree = "<group>";
@@ -1018,6 +1024,8 @@
 				CA0000012F0000010000000B /* ClaudeDecisionManager.swift in Sources */,
 				CA0000012F00000100000001 /* ClaudeUsageManager.swift in Sources */,
 				CA0000012F00000100000002 /* ClaudeUsageView.swift in Sources */,
+				CA0000012F0000010000000D /* ClaudeQuestionView.swift in Sources */,
+				CA0000012F0000010000000C /* ClaudeDecisionView.swift in Sources */,
 				1132E5142E777B920068732D /* YouTubeMusicNetworking.swift in Sources */,
 				1132E5122E777B6E0068732D /* YouTubeMusicModels.swift in Sources */,
 				11CFC65F2E097F2F00748C80 /* OnboardingView.swift in Sources */,
