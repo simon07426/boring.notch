@@ -160,6 +160,23 @@ final class BridgeTests: XCTestCase {
         XCTAssertEqual(back, r)
     }
 
+    /// The exact body tv_bridge.py's NotchTarget.post_decision sends for AskUserQuestion
+    /// (see test_question_goes_to_notch_only_and_returns_updated_input): no multiSelect, header or description.
+    private let pythonQuestionPayload = #"{"session": "s1", "kind": "question", "project": "nonexistent", "question": "Which?", "questions": [{"question": "Which?", "options": [{"label": "A"}, {"label": "B"}]}]}"#
+
+    func testDecodesPythonQuestionPayloadWithoutMultiSelect() throws {
+        let r = try JSONDecoder().decode(DecisionRequest.self, from: Data(pythonQuestionPayload.utf8))
+        XCTAssertEqual(r.kind, .question)
+        XCTAssertEqual(r.questions, [DecisionQuestion(question: "Which?", header: nil,
+                                                      options: [.init(label: "A"), .init(label: "B")], multiSelect: false)])
+    }
+
+    func testRouterAcceptsPythonQuestionPayload() async {
+        let router = BridgeRouter(token: "tok", store: DecisionStore())
+        let r = await router.handle(req("POST", "/decision", body: Data(pythonQuestionPayload.utf8)))
+        XCTAssertEqual(r.status, 201)
+    }
+
     // MARK: - PopupPolicy
 
     func testSuppressedWhenClaudeFrontmost() {

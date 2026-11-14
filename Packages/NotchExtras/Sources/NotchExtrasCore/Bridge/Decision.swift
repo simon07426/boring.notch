@@ -21,6 +21,17 @@ public struct DecisionQuestion: Codable, Equatable, Sendable {
         self.options = options
         self.multiSelect = multiSelect
     }
+
+    private enum CodingKeys: String, CodingKey { case question, header, options, multiSelect }
+
+    /// Tolerant decode: Claude Code (and the hook) may omit `header` and `multiSelect`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        question = try c.decode(String.self, forKey: .question)
+        header = try c.decodeIfPresent(String.self, forKey: .header)
+        options = try c.decode([Option].self, forKey: .options)
+        multiSelect = try c.decodeIfPresent(Bool.self, forKey: .multiSelect) ?? false
+    }
 }
 
 public struct DecisionRequest: Codable, Equatable, Sendable {
