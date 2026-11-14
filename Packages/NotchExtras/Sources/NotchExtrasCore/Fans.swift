@@ -52,10 +52,11 @@ public enum FanMath {
         return Swift.min(Swift.max(value, min), max)
     }
 
-    /// Below 1 RPM (or not a finite reading) the fan is shown as off.
+    /// Below 1 RPM (or not a finite reading) the fan is shown as off. Values above 99_999 are capped.
     public static func display(_ rpm: Double) -> String {
         guard rpm.isFinite, rpm >= 1 else { return "Off" }
-        return "\(Int(rpm.rounded())) rpm"
+        let capped = Swift.min(rpm.rounded(), 99_999)
+        return "\(Int(capped)) rpm"
     }
 }
 
@@ -66,6 +67,8 @@ public enum FanCommand: Equatable {
     case ping
 
     /// Wire format, one line: `status` | `set <int>` | `auto` | `ping`.
+    /// `set` takes ASCII digits only, in 1...20000. Signs and 0 are rejected.
+    /// The daemon must still clamp the value to the SMC [min, max] before writing.
     public static func parse(_ line: String) -> FanCommand? {
         let tokens = line.trimmingCharacters(in: .whitespacesAndNewlines)
             .split(whereSeparator: { $0 == " " || $0 == "\t" })
@@ -75,7 +78,9 @@ public enum FanCommand: Equatable {
         case ("auto", 1): return .auto
         case ("ping", 1): return .ping
         case ("set", 2):
-            guard let rpm = Int(tokens[1]) else { return nil }
+            let digits = tokens[1]
+            guard digits.allSatisfy({ $0 >= "0" && $0 <= "9" }),
+                  let rpm = Int(digits), (1...20_000).contains(rpm) else { return nil }
             return .set(Double(rpm))
         default: return nil
         }

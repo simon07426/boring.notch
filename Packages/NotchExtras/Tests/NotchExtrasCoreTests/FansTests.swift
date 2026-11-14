@@ -33,6 +33,8 @@ final class FansTests: XCTestCase {
         XCTAssertEqual(FanMath.display(0.4), "Off")
         XCTAssertEqual(FanMath.display(2990.4), "2990 rpm")
         XCTAssertEqual(FanMath.display(2990.6), "2991 rpm")
+        XCTAssertEqual(FanMath.display(1e30), "99999 rpm")
+        XCTAssertEqual(FanMath.display(.nan), "Off")
     }
 
     func testCommandParse() {
@@ -45,6 +47,13 @@ final class FansTests: XCTestCase {
         XCTAssertEqual(FanCommand.parse("  auto  \n"), .auto)
         XCTAssertEqual(FanCommand.parse("ping"), .ping)
         XCTAssertNil(FanCommand.parse(""))
+        XCTAssertNil(FanCommand.parse("set -5"))
+        XCTAssertNil(FanCommand.parse("set +3000"))
+        XCTAssertNil(FanCommand.parse("set 0"))
+        XCTAssertNil(FanCommand.parse("set 99999999999999999999"))
+        XCTAssertNil(FanCommand.parse("set 20001"))
+        XCTAssertEqual(FanCommand.parse("set 20000"), .set(20000))
+        XCTAssertEqual(FanCommand.parse("set 1"), .set(1))
     }
 
     func testWatchdog() {
