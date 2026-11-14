@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CA0000012F00000100000021 /* FanManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0000022F00000100000021 /* FanManager.swift */; };
+		CA0000012F00000100000022 /* FansView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0000022F00000100000022 /* FansView.swift */; };
 		CA0000012F0000010000000D /* ClaudeQuestionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0000022F0000010000000D /* ClaudeQuestionView.swift */; };
 		CA0000012F0000010000000C /* ClaudeDecisionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0000022F0000010000000C /* ClaudeDecisionView.swift */; };
 		CA0000012F0000010000000A /* ClaudeBridgeServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA0000022F0000010000000A /* ClaudeBridgeServer.swift */; };
@@ -189,6 +191,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		CA0000022F00000100000021 /* FanManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FanManager.swift; sourceTree = "<group>"; };
+		CA0000022F00000100000022 /* FansView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FansView.swift; sourceTree = "<group>"; };
 		CA0000022F0000010000000D /* ClaudeQuestionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeQuestionView.swift; sourceTree = "<group>"; };
 		CA0000022F0000010000000C /* ClaudeDecisionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeDecisionView.swift; sourceTree = "<group>"; };
 		CA0000022F0000010000000A /* ClaudeBridgeServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeBridgeServer.swift; sourceTree = "<group>"; };
@@ -373,6 +377,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		CA0000032F00000100000021 /* Fans */ = {
+			isa = PBXGroup;
+			children = (
+				CA0000022F00000100000022 /* FansView.swift */,
+			);
+			path = Fans;
+			sourceTree = "<group>";
+		};
 		CA0000032F00000100000001 /* Claude */ = {
 			isa = PBXGroup;
 			children = (
@@ -513,6 +525,7 @@
 			isa = PBXGroup;
 			children = (
 				CA0000032F00000100000001 /* Claude */,
+				CA0000032F00000100000021 /* Fans */,
 				B141C23B2CA5F50900AC8CC8 /* Onboarding */,
 				B1C448992C97375A001F0858 /* Tips */,
 				14C08BB72C8DE49E000F8AA0 /* Calendar */,
@@ -540,6 +553,7 @@
 				CA0000022F0000010000000A /* ClaudeBridgeServer.swift */,
 				CA0000022F0000010000000B /* ClaudeDecisionManager.swift */,
 				CA0000022F00000100000001 /* ClaudeUsageManager.swift */,
+				CA0000022F00000100000021 /* FanManager.swift */,
 				11D58EA12E760AE100FA8377 /* ImageService.swift */,
 				F38DE6472D8243E2008B5C6D /* BatteryActivityManager.swift */,
 				112FB7342CCF16F70015238C /* NotchSpaceManager.swift */,
@@ -1046,6 +1060,8 @@
 				CA0000012F0000010000000A /* ClaudeBridgeServer.swift in Sources */,
 				CA0000012F0000010000000B /* ClaudeDecisionManager.swift in Sources */,
 				CA0000012F00000100000001 /* ClaudeUsageManager.swift in Sources */,
+				CA0000012F00000100000021 /* FanManager.swift in Sources */,
+				CA0000012F00000100000022 /* FansView.swift in Sources */,
 				CA0000012F00000100000002 /* ClaudeUsageView.swift in Sources */,
 				CA0000012F0000010000000D /* ClaudeQuestionView.swift in Sources */,
 				CA0000012F0000010000000C /* ClaudeDecisionView.swift in Sources */,

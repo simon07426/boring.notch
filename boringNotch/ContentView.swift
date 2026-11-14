@@ -384,7 +384,7 @@ struct ContentView: View {
                     case .claude:
                         ClaudeUsageView()
                     case .fans:
-                        EmptyView() // Task 13
+                        FansView()
                     }
                     }
                 }

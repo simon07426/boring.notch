@@ -29,9 +29,10 @@ struct TabSelectionView: View {
     @Default(.boringShelf) private var shelfEnabled
     @Default(.showClaudeTab) private var showClaudeTab
     @Default(.showFansTab) private var showFansTab
+    @ObservedObject private var fanManager = FanManager.shared
 
     private var visibleTabs: [TabModel] {
-        makeVisibleTabs(shelf: shelfEnabled, claude: showClaudeTab, fans: showFansTab)
+        makeVisibleTabs(shelf: shelfEnabled, claude: showClaudeTab, fans: showFansTab && fanManager.hasFans)
     }
     var body: some View {
         HStack(spacing: 0) {
@@ -58,6 +59,9 @@ struct TabSelectionView: View {
             }
         }
         .clipShape(Capsule())
+        .onChange(of: fanManager.hasFans) { _, has in
+            if !has && coordinator.currentView == .fans { coordinator.currentView = .home }
+        }
     }
 
 }
