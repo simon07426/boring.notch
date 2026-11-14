@@ -1,4 +1,5 @@
 import Combine
+import Defaults
 import Foundation
 import Network
 import NotchExtrasCore
@@ -13,10 +14,29 @@ final class ClaudeBridgeServer: ObservableObject {
 
     private let queue = DispatchQueue(label: "claude.bridge.server")
     private var listener: NWListener?
+    private var settingObserver: AnyCancellable?
 
     private static let requestReadTimeout: TimeInterval = 5
     private static let maxRequestBytes = 1_100_000
     private static let maxBody = 1_000_000
+
+    /// Runs the bridge only while the decision pop-up setting is on; off removes the bridge file
+    /// so the hook falls back to Claude's normal prompt.
+    func bindToSetting() {
+        guard settingObserver == nil else { return }
+        apply(enabled: Defaults[.claudeDecisionPopup])
+        settingObserver = Defaults.publisher(.claudeDecisionPopup)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] change in self?.apply(enabled: change.newValue) }
+    }
+
+    private func apply(enabled: Bool) {
+        if enabled {
+            do { try start() } catch { NSLog("Claude bridge failed to start: \(error)") }
+        } else {
+            stop(waitForRemoval: false)
+        }
+    }
 
     func start() throws {
         guard listener == nil else { return }
@@ -38,6 +58,8 @@ final class ClaudeBridgeServer: ObservableObject {
                 guard let p = listener?.port?.rawValue else { return }
                 DispatchQueue.main.async { self.port = Int(p) }
                 Task {
+                    let stillCurrent = await MainActor.run { self.listener === listener }
+                    guard stillCurrent else { return }
                     guard let json = Self.bridgeJSON(port: Int(p), token: token),
                           await XPCHelperClient.shared.writeClaudeBridgeFile(json) else {
                         NSLog("ClaudeBridgeServer: helper could not write the bridge file; the hook will not find the app")
@@ -46,7 +68,10 @@ final class ClaudeBridgeServer: ObservableObject {
                 }
             case .failed(let error):
                 NSLog("ClaudeBridgeServer: listener failed: \(error)")
-                DispatchQueue.main.async { self.port = nil }
+                DispatchQueue.main.async {
+                    guard self.listener === listener else { return }
+                    self.stop(waitForRemoval: false)
+                }
             default:
                 break
             }
@@ -55,11 +80,12 @@ final class ClaudeBridgeServer: ObservableObject {
         listener.start(queue: queue)
     }
 
-    func stop() {
+    func stop(waitForRemoval: Bool = true) {
+        guard listener != nil || waitForRemoval else { return }
         listener?.cancel()
         listener = nil
-        // Best-effort removal called from applicationWillTerminate on the main thread. The XPC
-        // client hops to the main actor, so pump the run loop (at most 1 s) instead of blocking it.
+        port = nil
+
         final class Flag: @unchecked Sendable { var done = false }
         let flag = Flag()
         Task {
@@ -68,11 +94,13 @@ final class ClaudeBridgeServer: ObservableObject {
             }
             flag.done = true
         }
+        guard waitForRemoval else { return }
+        // applicationWillTerminate (main thread): the XPC client hops to the main actor, so pump
+        // the run loop for at most 1 s instead of blocking it.
         let deadline = Date().addingTimeInterval(1)
         while !flag.done && Date() < deadline {
             RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
         }
-        DispatchQueue.main.async { self.port = nil }
     }
 
     // MARK: - Connections

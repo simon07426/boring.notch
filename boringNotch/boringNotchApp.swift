@@ -283,11 +283,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Task { @MainActor in
             _ = ClaudeDecisionManager.shared
-            do {
-                try ClaudeBridgeServer.shared.start()
-            } catch {
-                NSLog("Claude bridge failed to start: \(error)")
-            }
+            ClaudeBridgeServer.shared.bindToSetting()
         }
 
         if Defaults[.showClaudeTab] {

@@ -210,4 +210,27 @@ final class BridgeTests: XCTestCase {
         let p = await store.status(pendingID)
         XCTAssertEqual(p, .pending)
     }
+
+    // MARK: - PopupTracker
+
+    func testQueuedDecisionPopsWhenPreviousResolvedElsewhere() {
+        var t = PopupTracker()
+        XCTAssertTrue(t.shouldPost(current: "A", pending: ["A"], policyAllows: true))
+        XCTAssertFalse(t.shouldPost(current: "A", pending: ["A", "B"], policyAllows: true))
+        // A resolved elsewhere; B moves up and must pop.
+        XCTAssertTrue(t.shouldPost(current: "B", pending: ["B"], policyAllows: true))
+    }
+
+    func testSameDecisionNotPostedTwice() {
+        var t = PopupTracker()
+        XCTAssertTrue(t.shouldPost(current: "A", pending: ["A"], policyAllows: true))
+        XCTAssertFalse(t.shouldPost(current: "A", pending: ["A"], policyAllows: true))
+        XCTAssertFalse(t.shouldPost(current: nil, pending: [], policyAllows: true))
+    }
+
+    func testNoPostWhenPolicyDisallows() {
+        var t = PopupTracker()
+        XCTAssertFalse(t.shouldPost(current: "A", pending: ["A"], policyAllows: false))
+        XCTAssertFalse(t.shouldPost(current: "A", pending: ["A"], policyAllows: true))
+    }
 }

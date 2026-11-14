@@ -19,3 +19,18 @@ public enum PopupPolicy {
         return !suppressingBundleIDs.contains(frontmost)
     }
 }
+
+/// Decides, per queue change, whether the notch should pop for the current decision.
+/// Each decision id is considered once; ids no longer pending are forgotten.
+public struct PopupTracker: Sendable {
+    private var handled = Set<String>()
+
+    public init() {}
+
+    public mutating func shouldPost(current: String?, pending: [String], policyAllows: Bool) -> Bool {
+        handled.formIntersection(pending)
+        guard let current, !handled.contains(current) else { return false }
+        handled.insert(current)
+        return policyAllows
+    }
+}

@@ -22,7 +22,8 @@ final class ClaudeDecisionManager: ObservableObject {
     private static let resolvedRetention: TimeInterval = 300
     private static let claudeDesktopBundleID = "com.anthropic.claudefordesktop"
 
-    private var seenIDs = Set<String>()
+    private var lastKnownIDs: [String] = []
+    private var popupTracker = PopupTracker()
     private var changesTask: Task<Void, Never>?
     private var evictionTask: Task<Void, Never>?
 
@@ -60,26 +61,23 @@ final class ClaudeDecisionManager: ObservableObject {
 
     private func refresh() async {
         let pending = await store.pending
-        let newest = pending.contains { !seenIDs.contains($0.id) }
-        if newest {
-            lastDecisionAt = Date()
-            seenIDs.formUnion(pending.map(\.id))
-        }
+        let known = Set(lastKnownIDs)
+        if pending.contains(where: { !known.contains($0.id) }) { lastDecisionAt = Date() }
+        lastKnownIDs = pending.map(\.id)
 
-        let previousID = current?.id
         let next = pending.first
         current = next
         queuedCount = max(pending.count - 1, 0)
 
-        if let next, next.id != previousID, newest || previousID == nil {
-            let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-            if PopupPolicy.shouldOpenNotch(
-                frontmost: frontmost,
-                popupEnabled: Defaults[.claudeDecisionPopup],
-                showWhenFrontmost: Defaults[.claudePopupWhenFrontmost]
-            ) {
-                NotificationCenter.default.post(name: .claudeDecisionArrived, object: next.id)
-            }
+        let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let allowed = PopupPolicy.shouldOpenNotch(
+            frontmost: frontmost,
+            popupEnabled: Defaults[.claudeDecisionPopup],
+            showWhenFrontmost: Defaults[.claudePopupWhenFrontmost]
+        )
+        let shouldPost = popupTracker.shouldPost(current: next?.id, pending: pending.map(\.id), policyAllows: allowed)
+        if shouldPost, let next {
+            NotificationCenter.default.post(name: .claudeDecisionArrived, object: next.id)
         }
     }
 }
