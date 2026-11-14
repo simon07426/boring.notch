@@ -32,7 +32,7 @@ struct ClaudeDecisionHost: View {
             }
         }
         .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .onAppear { shown = manager.current }
         .onChange(of: manager.current) { _, new in if !holdSent { shown = new } }
     }
@@ -85,36 +85,45 @@ struct ClaudePermissionView: View {
         let r = decision.request
         VStack(alignment: .leading, spacing: 8) {
             ClaudeDecisionHeader(project: r.project, queuedCount: queuedCount)
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(r.command == nil ? r.question : "Allow running:")
-                        .font(.subheadline).foregroundStyle(.white)
-                    if let command = r.command {
-                        Text(command)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.white)
-                            .lineLimit(3)
-                            .truncationMode(.middle)
-                            .help(command)
-                            .padding(6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
-                }
-                if let explain = r.explain, !explain.isEmpty {
-                    Text("\u{201C}\(explain)\u{201D}").font(.caption).foregroundStyle(.gray).lineLimit(2)
-                }
-                }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+            ViewThatFits(in: .vertical) {
+                permissionText(r)
+                ScrollView(.vertical, showsIndicators: false) { permissionText(r) }
             }
-            HStack(spacing: 8) {
-                Button("Deny", action: onDeny)
-                Spacer()
-                Button("Answer in Claude", action: onHandBack)
-                Button(action: onAllow) { Text("Allow").bold() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.effectiveAccent)
-            }
-            .controlSize(.small)
+            buttonRow
         }
+    }
+
+    private func permissionText(_ r: DecisionRequest) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(r.command == nil ? r.question : "Allow running:")
+                .font(.subheadline).foregroundStyle(.white)
+            if let command = r.command {
+                Text(command)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .lineLimit(3)
+                    .truncationMode(.middle)
+                    .help(command)
+                    .padding(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+            }
+            if let explain = r.explain, !explain.isEmpty {
+                Text("\u{201C}\(explain)\u{201D}").font(.caption).foregroundStyle(.gray).lineLimit(2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var buttonRow: some View {
+        HStack(spacing: 8) {
+            Button("Deny", action: onDeny)
+            Spacer()
+            Button("Answer in Claude", action: onHandBack)
+            Button(action: onAllow) { Text("Allow").bold() }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.effectiveAccent)
+        }
+        .controlSize(.small)
     }
 }

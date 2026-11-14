@@ -10,27 +10,32 @@ struct FansView: View {
     @FocusState private var fieldFocused: Bool
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 10) {
-                header
-                if manager.daemonInstalled, let fans = manager.status?.fans, !fans.isEmpty {
-                    controls(fans)
-                } else if !manager.daemonInstalled {
-                    enableRow
-                } else {
-                    Text("Loading…").font(.subheadline).foregroundStyle(.gray)
-                }
-                temperatures
-                if let message = manager.errorMessage {
-                    Text(message).font(.caption).foregroundStyle(.orange).lineLimit(2)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+        ViewThatFits(in: .vertical) {
+            fansContent
+            ScrollView(.vertical, showsIndicators: false) { fansContent }
         }
         .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .onAppear { manager.startPolling() }
         .onDisappear { manager.stopPolling() }
+    }
+
+    private var fansContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            header
+            if manager.daemonInstalled, let fans = manager.status?.fans, !fans.isEmpty {
+                controls(fans)
+            } else if !manager.daemonInstalled {
+                enableRow
+            } else {
+                Text("Loading…").font(.subheadline).foregroundStyle(.gray)
+            }
+            temperatures
+            if let message = manager.errorMessage {
+                Text(message).font(.caption).foregroundStyle(.orange).lineLimit(2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     // MARK: - Sections

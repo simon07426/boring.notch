@@ -21,12 +21,9 @@ struct ClaudeQuestionView: View {
             ClaudeDecisionHeader(project: decision.request.project, queuedCount: queuedCount,
                                  trailing: questions.count > 1 ? "\(index + 1) of \(questions.count)" : nil)
             Text(question.question).font(.subheadline).foregroundStyle(.white).lineLimit(2)
-            ScrollView {
-                VStack(spacing: 4) {
-                    ForEach(question.options, id: \.label) { option in
-                        optionRow(option)
-                    }
-                }
+            ViewThatFits(in: .vertical) {
+                optionList
+                ScrollView(showsIndicators: false) { optionList }
             }
             HStack {
                 Button("Answer in Claude", action: onHandBack)
@@ -39,6 +36,14 @@ struct ClaudeQuestionView: View {
                 }
             }
             .controlSize(.small)
+        }
+    }
+
+    private var optionList: some View {
+        VStack(spacing: 4) {
+            ForEach(question.options, id: \.label) { option in
+                optionRow(option)
+            }
         }
     }
 
