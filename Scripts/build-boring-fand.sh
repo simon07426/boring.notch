@@ -21,7 +21,9 @@ mkdir -p "$DEST"
 cp -f "$BIN_DIR/boring-fand" "$DEST/$LABEL"
 cp -f "$PKG/Resources/$LABEL.plist" "$DEST/$LABEL.plist"
 
-if /usr/bin/security find-identity -v -p codesigning | grep -q '"Boring Notch Dev"'; then
+# Capture first: `cmd | grep -q` under pipefail can report a false negative via SIGPIPE.
+IDENTITIES="$(/usr/bin/security find-identity -v -p codesigning || true)"
+if grep -q '"Boring Notch Dev"' <<<"$IDENTITIES"; then
     /usr/bin/codesign -f -i "$LABEL" -s "Boring Notch Dev" "$DEST/$LABEL"
 else
     echo "warning: 'Boring Notch Dev' code signing identity not found; ad-hoc signing the fan daemon" >&2

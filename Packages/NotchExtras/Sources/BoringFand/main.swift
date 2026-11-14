@@ -47,7 +47,7 @@ final class FanController {
     func revertIfStale() {
         if watchdog.shouldRevert(now: monotonicNow(), manual: manual) {
             log("watchdog: no heartbeat, reverting to auto")
-            _ = auto()
+            autoWithRetry()
         }
     }
 
@@ -61,6 +61,18 @@ final class FanController {
         }
         if firstError == nil { manual = false }
         return firstError
+    }
+
+    /// Fail-safe revert: retry up to 3 times, ~0.2 s apart, instead of waiting for the next tick.
+    @discardableResult
+    func autoWithRetry() -> String? {
+        var err = auto()
+        for _ in 0..<2 where err != nil {
+            usleep(200_000)
+            err = auto()
+        }
+        if let err { log("auto failed after retries: \(err)") }
+        return err
     }
 
     func status() -> FanStatus {
@@ -79,27 +91,29 @@ final class FanController {
     /// Clamps `rpm` to each fan's SMC [min, max], switches it to manual and sets the target.
     func set(_ rpm: Double) -> String? {
         guard fanCount > 0 else { return "no fans" }
+        // Total mode-write retry budget for one `set`, across all fans (the client waits longer than this).
+        let retryDeadline = monotonicNow().addingTimeInterval(3)
         for i in 0..<fanCount {
             guard let modeKey = modeKeys[i] else { return "fan \(i): no mode key" }
             guard let lo = smc.readFloat("F\(i)Mn"), let hi = smc.readFloat("F\(i)Mx"), lo > 0, hi >= lo else {
-                _ = auto()
+                autoWithRetry()
                 return "fan \(i): cannot read range"
             }
             let target = Swift.min(Swift.max(rpm, lo), hi)
             // The mode write can be refused for a moment after a mode change: bounded retry.
             var modeErr: String? = "unattempted"
-            for attempt in 0..<10 {
+            while true {
                 modeErr = smc.writeByte(modeKey, 1)
-                if modeErr == nil { break }
-                if attempt < 9 { usleep(300_000) }
+                if modeErr == nil || monotonicNow() >= retryDeadline { break }
+                usleep(300_000)
             }
             if let modeErr {
-                _ = auto()
+                autoWithRetry()
                 return "fan \(i): manual mode refused (\(modeErr))"
             }
             manual = true
             if let err = smc.writeFloat("F\(i)Tg", target) {
-                _ = auto()
+                autoWithRetry()
                 return "fan \(i): target write failed (\(err))"
             }
         }
@@ -148,6 +162,8 @@ func readLine(fd: Int32) -> String? {
 
 func serve(fd client: Int32, allowedUID: uid_t, fans: FanController) {
     defer { close(client) }
+    var noSigPipe: Int32 = 1
+    setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
     var peerUID: uid_t = 0, peerGID: gid_t = 0
     guard getpeereid(client, &peerUID, &peerGID) == 0, peerUID == allowedUID || peerUID == 0 else { return }
     let reply: String
@@ -239,7 +255,8 @@ watchdogTimer.setEventHandler { fans.revertIfStale() }
 watchdogTimer.resume()
 
 var signalSources: [DispatchSourceSignal] = []
-for sig in [SIGTERM, SIGINT] {
+signal(SIGPIPE, SIG_IGN)
+for sig in [SIGTERM, SIGINT, SIGHUP] {
     signal(sig, SIG_IGN)
     let src = DispatchSource.makeSignalSource(signal: sig, queue: .main)
     src.setEventHandler { shutdown() }
