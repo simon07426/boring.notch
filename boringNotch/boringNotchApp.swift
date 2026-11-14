@@ -82,6 +82,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DistributedNotificationCenter.default().removeObserver(observer)
             screenUnlockedObserver = nil
         }
+        ClaudeBridgeServer.shared.stop()
         MusicManager.shared.destroy()
         cleanupDragDetectors()
         cleanupWindows()
@@ -280,6 +281,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Task { @MainActor in
+            _ = ClaudeDecisionManager.shared
+            do {
+                try ClaudeBridgeServer.shared.start()
+            } catch {
+                NSLog("Claude bridge failed to start: \(error)")
+            }
+        }
+
         if Defaults[.showClaudeTab] {
             Task { @MainActor in ClaudeUsageManager.shared.start() }
         }

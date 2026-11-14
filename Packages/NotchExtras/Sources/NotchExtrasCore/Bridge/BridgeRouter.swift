@@ -39,6 +39,7 @@ public struct BridgeRouter: Sendable {
     }
 
     private func authorized(_ r: HTTPRequest) -> Bool {
+        guard !token.isEmpty else { return false }
         guard let header = r.headers["authorization"], header.hasPrefix("Bearer ") else { return false }
         let given = Array(header.dropFirst("Bearer ".count).utf8)
         let expected = Array(token.utf8)

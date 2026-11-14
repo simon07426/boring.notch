@@ -85,4 +85,9 @@ public enum DecisionStatus: Equatable, Sendable {
 public struct PendingDecision: Equatable, Sendable {
     public let id: String
     public let request: DecisionRequest
+
+    public init(id: String, request: DecisionRequest) {
+        self.id = id
+        self.request = request
+    }
 }

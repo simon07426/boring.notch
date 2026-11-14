@@ -915,6 +915,9 @@ struct About: View {
 }
 
 struct ClaudeSettings: View {
+    @ObservedObject private var bridge = ClaudeBridgeServer.shared
+    @ObservedObject private var decisions = ClaudeDecisionManager.shared
+
     var body: some View {
         Form {
             Section {
@@ -924,6 +927,21 @@ struct ClaudeSettings: View {
                 Defaults.Toggle(key: .showFansTab) { Text("Show Fans tab") } // temporary; moves in Task 13
             } header: {
                 Text("Claude")
+            }
+
+            Section {
+                if let port = bridge.port {
+                    Text("Bridge listening on port \(String(port))")
+                } else {
+                    Text("Bridge not running")
+                }
+                if let last = decisions.lastDecisionAt {
+                    (Text("Last decision received ") + Text(last, style: .relative) + Text(" ago"))
+                } else {
+                    Text("No decisions yet")
+                }
+            } header: {
+                Text("Hook status")
             }
         }
         .formStyle(.grouped)

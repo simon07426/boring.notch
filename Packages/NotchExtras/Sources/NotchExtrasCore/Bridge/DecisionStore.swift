@@ -4,6 +4,7 @@ public actor DecisionStore {
     private struct Entry {
         let request: DecisionRequest
         var status: DecisionStatus = .pending
+        var resolvedAt: Date?
     }
 
     private struct Waiter {
@@ -47,6 +48,7 @@ public actor DecisionStore {
     public func resolve(_ id: String, _ s: DecisionStatus) {
         guard s != .pending, entries[id]?.status == .pending else { return }
         entries[id]?.status = s
+        entries[id]?.resolvedAt = Date()
         wake(id, with: s)
         changeContinuation.yield()
     }
@@ -57,6 +59,18 @@ public actor DecisionStore {
         order.removeAll { $0 == id }
         wake(id, with: .gone)
         changeContinuation.yield()
+    }
+
+    /// Drops resolved decisions that were resolved more than `olderThan` seconds before `now`.
+    public func evictResolved(olderThan age: TimeInterval, now: Date = Date()) {
+        let stale = entries.filter { _, e in
+            guard let at = e.resolvedAt else { return false }
+            return now.timeIntervalSince(at) > age
+        }.keys
+        guard !stale.isEmpty else { return }
+        for id in stale { entries[id] = nil }
+        let gone = Set(stale)
+        order.removeAll { gone.contains($0) }
     }
 
     public func status(_ id: String) -> DecisionStatus {

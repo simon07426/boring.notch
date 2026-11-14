@@ -1,0 +1,21 @@
+import Foundation
+
+public enum PopupPolicy {
+    /// Frontmost apps where the user is already looking at Claude, so the notch stays closed.
+    public static let suppressingBundleIDs: Set<String> = [
+        "com.anthropic.claudefordesktop",
+        "com.apple.Terminal",
+        "com.googlecode.iterm2",
+        "com.mitchellh.ghostty",
+        "dev.warp.Warp-Stable",
+        "com.microsoft.VSCode",
+        "com.todesktop.230313mzl4w4u92", // Cursor
+    ]
+
+    public static func shouldOpenNotch(frontmost: String?, popupEnabled: Bool, showWhenFrontmost: Bool) -> Bool {
+        guard popupEnabled else { return false }
+        if showWhenFrontmost { return true }
+        guard let frontmost else { return true }
+        return !suppressingBundleIDs.contains(frontmost)
+    }
+}

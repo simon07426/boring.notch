@@ -159,4 +159,55 @@ final class BridgeTests: XCTestCase {
         let back = try JSONDecoder().decode(DecisionRequest.self, from: JSONEncoder().encode(r))
         XCTAssertEqual(back, r)
     }
+
+    // MARK: - PopupPolicy
+
+    func testSuppressedWhenClaudeFrontmost() {
+        XCTAssertFalse(PopupPolicy.shouldOpenNotch(frontmost: "com.anthropic.claudefordesktop", popupEnabled: true, showWhenFrontmost: false))
+    }
+
+    func testSuppressedForTerminal() {
+        XCTAssertFalse(PopupPolicy.shouldOpenNotch(frontmost: "com.apple.Terminal", popupEnabled: true, showWhenFrontmost: false))
+    }
+
+    func testOpensWhenOtherAppFrontmost() {
+        XCTAssertTrue(PopupPolicy.shouldOpenNotch(frontmost: "com.apple.Safari", popupEnabled: true, showWhenFrontmost: false))
+    }
+
+    func testShowWhenFrontmostOverrides() {
+        XCTAssertTrue(PopupPolicy.shouldOpenNotch(frontmost: "com.apple.Terminal", popupEnabled: true, showWhenFrontmost: true))
+    }
+
+    func testDisabledNeverOpens() {
+        XCTAssertFalse(PopupPolicy.shouldOpenNotch(frontmost: "com.apple.Safari", popupEnabled: false, showWhenFrontmost: true))
+    }
+
+    func testNilFrontmostOpens() {
+        XCTAssertTrue(PopupPolicy.shouldOpenNotch(frontmost: nil, popupEnabled: true, showWhenFrontmost: false))
+    }
+
+    // MARK: - Fail closed / eviction
+
+    func testEmptyTokenRejectsEverything() async {
+        let router = BridgeRouter(token: "", store: DecisionStore())
+        let r1 = await router.handle(req("POST", "/decision", token: "", body: Data("{}".utf8)))
+        XCTAssertEqual(r1.status, 401)
+        let r2 = await router.handle(req("GET", "/decision/x", token: nil))
+        XCTAssertEqual(r2.status, 401)
+    }
+
+    func testEvictsResolvedAfterRetention() async {
+        let store = DecisionStore()
+        let resolved = await store.add(permission())
+        let pendingID = await store.add(permission("s2"))
+        await store.resolve(resolved, .allow)
+        await store.evictResolved(olderThan: 300, now: Date().addingTimeInterval(60))
+        var s = await store.status(resolved)
+        XCTAssertEqual(s, .allow)
+        await store.evictResolved(olderThan: 300, now: Date().addingTimeInterval(301))
+        s = await store.status(resolved)
+        XCTAssertEqual(s, .gone)
+        let p = await store.status(pendingID)
+        XCTAssertEqual(p, .pending)
+    }
 }
