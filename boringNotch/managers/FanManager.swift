@@ -29,6 +29,9 @@ final class FanManager: ObservableObject {
     private var lastCommand: Task<Void, Never>?
     private var lastSetAt = Date.distantPast
     private var isInstalling = false
+    private var installedMisses = 0
+    /// Daemon client times out at 8 s; give up on a hung command just after.
+    private static let commandTimeout: TimeInterval = 9
 
     private init() {}
 
@@ -58,9 +61,17 @@ final class FanManager: ObservableObject {
         await refreshStatus()
     }
 
-    func refreshInstalled() async {
-        daemonInstalled = await XPCHelperClient.shared.isFanDaemonInstalled()
-        if !daemonInstalled {
+    /// One transient "not installed" answer is ignored (manual state and heartbeat stay) unless
+    /// `confirmed` (right after our own uninstall); a second consecutive one counts.
+    func refreshInstalled(confirmed: Bool = false) async {
+        if await XPCHelperClient.shared.isFanDaemonInstalled() {
+            installedMisses = 0
+            daemonInstalled = true
+            return
+        }
+        installedMisses += 1
+        if confirmed || installedMisses >= 2 || !daemonInstalled {
+            daemonInstalled = false
             status = nil
             clearManual()
         }
@@ -102,10 +113,13 @@ final class FanManager: ObservableObject {
     func setAuto() {
         pendingSet?.cancel()
         pendingSet = nil
-        clearManual()
         Task { [weak self] in
-            _ = await self?.send("auto")
-            await self?.refreshStatus()
+            guard let self else { return }
+            // Manual state and heartbeat stay until the daemon confirms; retry once on failure.
+            var reply = await self.send("auto")
+            if reply == nil { reply = await self.send("auto") }
+            if reply != nil { self.clearManual() }
+            await self.refreshStatus()
         }
     }
 
@@ -135,7 +149,7 @@ final class FanManager: ObservableObject {
         case .success:
             errorMessage = nil
             status = nil
-            await refreshInstalled()
+            await refreshInstalled(confirmed: true)
         case .failure(let failure):
             errorMessage = failure.message
             await refreshInstalled()
@@ -143,10 +157,17 @@ final class FanManager: ObservableObject {
     }
 
     /// Best-effort `auto` for app termination; never waits longer than `timeout`.
-    /// Spins the run loop instead of blocking, because the XPC client hops to the main actor.
-    nonisolated static func sendAutoBlocking(timeout: TimeInterval = 1) {
+    /// Skipped without a daemon. Waits for the in-flight command first so a pending `set`
+    /// can't land after the `auto`. Spins the run loop instead of blocking, because the
+    /// XPC client hops to the main actor.
+    static func sendAutoBlocking(timeout: TimeInterval = 1) {
+        let manager = FanManager.shared
+        guard manager.daemonInstalled else { return }
+        manager.pendingSet?.cancel()
+        let inFlight = manager.lastCommand
         let done = DoneFlag()
-        Task.detached {
+        Task { @MainActor in
+            await inFlight?.value
             _ = await XPCHelperClient.shared.fanCommand("auto")
             done.set()
         }
@@ -185,7 +206,7 @@ final class FanManager: ObservableObject {
         let task = Task { [weak self] () -> String? in
             await previous?.value
             guard self != nil else { return nil }
-            return await XPCHelperClient.shared.fanCommand(line)
+            return await Self.fanCommandWithTimeout(line, seconds: Self.commandTimeout)
         }
         lastCommand = Task { _ = await task.value }
         let reply = await task.value
@@ -199,6 +220,18 @@ final class FanManager: ObservableObject {
         }
         errorMessage = nil
         return reply
+    }
+
+    /// A hung daemon call must not stall the serial queue: resolve nil after `seconds`.
+    private nonisolated static func fanCommandWithTimeout(_ line: String, seconds: TimeInterval) async -> String? {
+        await withCheckedContinuation { continuation in
+            let gate = ResumeOnce(continuation)
+            Task.detached { gate.resume(await XPCHelperClient.shared.fanCommand(line)) }
+            Task.detached {
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                gate.resume(nil)
+            }
+        }
     }
 
     private static func errorText(in reply: String) -> String? {
@@ -232,4 +265,17 @@ private final class DoneFlag: @unchecked Sendable {
     private var value = false
     var isSet: Bool { lock.lock(); defer { lock.unlock() }; return value }
     func set() { lock.lock(); value = true; lock.unlock() }
+}
+
+private final class ResumeOnce: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<String?, Never>?
+    init(_ continuation: CheckedContinuation<String?, Never>) { self.continuation = continuation }
+    func resume(_ value: String?) {
+        lock.lock()
+        let c = continuation
+        continuation = nil
+        lock.unlock()
+        c?.resume(returning: value)
+    }
 }

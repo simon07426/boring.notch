@@ -6,6 +6,7 @@ struct FansView: View {
     @ObservedObject private var manager = FanManager.shared
     @Default(.fanSensorsExpanded) private var expanded
     @State private var text = ""
+    @State private var syncedText = ""
     @FocusState private var fieldFocused: Bool
 
     var body: some View {
@@ -128,15 +129,19 @@ struct FansView: View {
         )
     }
 
+    /// Acts only when the user changed the text; a bare focus/blur must not engage Manual.
     private func commit(_ range: ClosedRange<Double>) {
-        if let value = FanMath.parseTyped(text, min: range.lowerBound, max: range.upperBound) {
-            manager.setSpeed(value)
-        }
-        syncText(forceFrom: FanMath.parseTyped(text, min: range.lowerBound, max: range.upperBound))
+        guard text != syncedText else { return }
+        let parsed = FanMath.parseTyped(text, min: range.lowerBound, max: range.upperBound)
+        if let parsed { manager.setSpeed(parsed) }
+        syncText(forceFrom: parsed)
     }
 
-    /// Shows the current target, or `forceFrom` right after a commit (the manager has it already).
+    /// Shows the current target, or `forceFrom` right after a commit. Invalid input with no
+    /// known target reverts to an empty field.
     private func syncText(forceFrom value: Double? = nil) {
-        if let v = value ?? manager.displayTarget { text = "\(Int(v.rounded()))" }
+        let shown = (value ?? manager.displayTarget).map { "\(Int($0.rounded()))" } ?? ""
+        text = shown
+        syncedText = shown
     }
 }

@@ -82,7 +82,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DistributedNotificationCenter.default().removeObserver(observer)
             screenUnlockedObserver = nil
         }
-        FanManager.sendAutoBlocking()
+        MainActor.assumeIsolated { FanManager.sendAutoBlocking() }
         ClaudeBridgeServer.shared.stop()
         MusicManager.shared.destroy()
         cleanupDragDetectors()
