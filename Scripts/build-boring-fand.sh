@@ -22,7 +22,7 @@ cp -f "$BIN_DIR/boring-fand" "$DEST/$LABEL"
 cp -f "$PKG/Resources/$LABEL.plist" "$DEST/$LABEL.plist"
 
 # Capture first: `cmd | grep -q` under pipefail can report a false negative via SIGPIPE.
-IDENTITIES="$(/usr/bin/security find-identity -v -p codesigning || true)"
+IDENTITIES="$(/usr/bin/security find-identity -p codesigning || true)"
 if grep -q '"Boring Notch Dev"' <<<"$IDENTITIES"; then
     /usr/bin/codesign -f -i "$LABEL" -s "Boring Notch Dev" "$DEST/$LABEL"
 else
