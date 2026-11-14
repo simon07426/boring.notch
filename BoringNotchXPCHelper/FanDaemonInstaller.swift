@@ -15,16 +15,21 @@ enum FanDaemonInstaller {
 
     static func uninstallScript() -> String { FanInstallScript.uninstall() }
 
-    /// Runs `script` as root via the standard administrator prompt. Must be called on the main thread.
+    /// Runs `script` as root via the standard administrator prompt, by launching `/usr/bin/osascript`
+    /// (an XPC service cannot present the authorization dialog itself). Blocks until the user finishes
+    /// the prompt, with no timeout; call it off the main thread.
     static func runPrivileged(_ script: String) -> (ok: Bool, message: String?) {
         let source = "do shell script \"\(FanInstallScript.appleScriptEscape(script))\" with administrator privileges"
-        guard let apple = NSAppleScript(source: source) else { return (false, "Could not build installer script") }
-        var errorInfo: NSDictionary?
-        apple.executeAndReturnError(&errorInfo)
-        if let errorInfo {
-            let msg = errorInfo[NSAppleScript.errorMessage] as? String ?? "Installation failed"
-            return (false, msg)
+        return runOsascript(source)
+    }
+
+    static func runOsascript(_ source: String) -> (ok: Bool, message: String?) {
+        guard let outcome = ProcessRunner.run("/usr/bin/osascript", arguments: ["-e", source], timeout: nil) else {
+            return (false, "Could not launch the installer")
         }
-        return (true, nil)
+        if outcome.status == 0 { return (true, nil) }
+        let err = (String(data: outcome.stderr, encoding: .utf8) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if err.contains("-128") || err.contains("User canceled") { return (false, "Cancelled") }
+        return (false, err.isEmpty ? "Installation failed" : err)
     }
 }

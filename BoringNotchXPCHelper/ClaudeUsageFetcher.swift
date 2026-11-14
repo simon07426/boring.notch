@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import Security
 import NotchExtrasCore
 
 enum ClaudeUsageFetcher {
@@ -40,27 +39,23 @@ enum ClaudeUsageFetcher {
         }
     }
 
+    /// Reads the token through `/usr/bin/security`: Claude Code's item trusts that tool, and an XPC
+    /// service cannot present the Keychain access prompt itself. Read-only; the output is never logged.
     private static func readCredentials() -> Result<ClaudeCredentials, UsageFetchError> {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        switch status {
-        case errSecSuccess:
-            guard let data = item as? Data,
-                  let credentials = try? ClaudeCredentials.parse(data)
-            else { return .failure(.noCredentials) }
-            return .success(credentials)
-        case errSecItemNotFound:
-            return .failure(.noCredentials)
-        case errSecAuthFailed, errSecUserCanceled, errSecInteractionNotAllowed:
-            return .failure(.keychainDenied)
-        default:
-            return .failure(.noCredentials)
+        guard let outcome = ProcessRunner.run(
+            "/usr/bin/security",
+            arguments: ["find-generic-password", "-s", keychainService, "-w"],
+            timeout: 5
+        ) else { return .failure(.keychainDenied) }
+        if outcome.timedOut { return .failure(.keychainDenied) }
+        switch outcome.status {
+        case 0: break
+        case 44: return .failure(.noCredentials)
+        default: return .failure(.keychainDenied)
         }
+        var bytes = outcome.stdout
+        while let last = bytes.last, last == 0x0A || last == 0x0D { bytes.removeLast() }
+        guard let credentials = try? ClaudeCredentials.parse(bytes) else { return .failure(.noCredentials) }
+        return .success(credentials)
     }
 }

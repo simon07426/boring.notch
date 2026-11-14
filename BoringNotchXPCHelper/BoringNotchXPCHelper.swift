@@ -134,8 +134,8 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
         case .failure(let error):
             reply(false, error.message)
         case .success(let script):
-            // NSAppleScript wants the main thread; the helper's main run loop serves XPC.
-            DispatchQueue.main.async {
+            // Blocks while the user types the admin password, so keep it off the main thread.
+            DispatchQueue.global(qos: .userInitiated).async {
                 let result = FanDaemonInstaller.runPrivileged(script)
                 reply(result.ok, result.message)
             }
@@ -146,10 +146,8 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
         DispatchQueue.global(qos: .userInitiated).async {
             // Best effort: return the fans to auto before the daemon goes away.
             _ = FanDaemonClient.send("auto")
-            DispatchQueue.main.async {
-                let result = FanDaemonInstaller.runPrivileged(FanDaemonInstaller.uninstallScript())
-                reply(result.ok, result.message)
-            }
+            let result = FanDaemonInstaller.runPrivileged(FanDaemonInstaller.uninstallScript())
+            reply(result.ok, result.message)
         }
     }
 
