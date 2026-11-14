@@ -100,6 +100,7 @@ class BoringViewCoordinator: ObservableObject {
     @Published var optionKeyPressed: Bool = true
     private var accessibilityObserver: Any?
     private var hudReplacementCancellable: AnyCancellable?
+    private var tabVisibilityCancellable: AnyCancellable?
 
     private init() {
         // Perform migration from name-based to UUID-based storage
@@ -132,6 +133,26 @@ class BoringViewCoordinator: ObservableObject {
                 if Defaults[.hudReplacement] {
                     await MediaKeyInterceptor.shared.start(promptIfNeeded: false)
                 }
+            }
+        }
+
+        // Fall back to Home when the current tab gets hidden
+        tabVisibilityCancellable = Publishers.Merge3(
+            Defaults.publisher(.showClaudeTab).map { _ in () },
+            Defaults.publisher(.showFansTab).map { _ in () },
+            Defaults.publisher(.boringShelf).map { _ in () }
+        )
+        .sink { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self else { return }
+                let hidden: Bool
+                switch self.currentView {
+                case .home: hidden = false
+                case .shelf: hidden = !Defaults[.boringShelf]
+                case .claude: hidden = !Defaults[.showClaudeTab]
+                case .fans: hidden = !Defaults[.showFansTab]
+                }
+                if hidden { self.currentView = .home }
             }
         }
 

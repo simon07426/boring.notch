@@ -82,6 +82,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DistributedNotificationCenter.default().removeObserver(observer)
             screenUnlockedObserver = nil
         }
+        MainActor.assumeIsolated { FanManager.sendAutoBlocking() }
+        ClaudeBridgeServer.shared.stop()
         MusicManager.shared.destroy()
         cleanupDragDetectors()
         cleanupWindows()
@@ -280,6 +282,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Task { @MainActor in
+            _ = ClaudeDecisionManager.shared
+            ClaudeBridgeServer.shared.bindToSetting()
+        }
+
+        Task { @MainActor in await FanManager.shared.startup() }
+
+        if Defaults[.showClaudeTab] {
+            Task { @MainActor in ClaudeUsageManager.shared.start() }
+        }
 
         NotificationCenter.default.addObserver(
             self,

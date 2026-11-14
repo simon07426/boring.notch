@@ -51,6 +51,12 @@ struct SettingsView: View {
                 NavigationLink(value: "Shelf") {
                     Label("Shelf", systemImage: "books.vertical")
                 }
+                NavigationLink(value: "Claude") {
+                    Label("Claude", systemImage: "sparkle")
+                }
+                NavigationLink(value: "Fans") {
+                    Label("Fans", systemImage: "fan")
+                }
                 NavigationLink(value: "Shortcuts") {
                     Label("Shortcuts", systemImage: "keyboard")
                 }
@@ -85,6 +91,10 @@ struct SettingsView: View {
                     Charge()
                 case "Shelf":
                     Shelf()
+                case "Claude":
+                    ClaudeSettings()
+                case "Fans":
+                    FansSettings()
                 case "Shortcuts":
                     Shortcuts()
                 case "Extensions":
@@ -906,6 +916,86 @@ struct About: View {
             CheckForUpdatesView(updater: updaterController.updater)
         }
         .navigationTitle("About")
+    }
+}
+
+struct ClaudeSettings: View {
+    @ObservedObject private var bridge = ClaudeBridgeServer.shared
+    @ObservedObject private var decisions = ClaudeDecisionManager.shared
+
+    var body: some View {
+        Form {
+            Section {
+                Defaults.Toggle(key: .showClaudeTab) { Text("Show Claude tab") }
+                Defaults.Toggle(key: .claudeDecisionPopup) { Text("Show decision pop-up") }
+                Defaults.Toggle(key: .claudePopupWhenFrontmost) { Text("Show pop-up even when Claude is in front") }
+            } header: {
+                Text("Claude")
+            }
+
+            Section {
+                if let port = bridge.port {
+                    Text("Bridge listening on port \(String(port))")
+                } else {
+                    Text("Bridge not running")
+                }
+                if let last = decisions.lastDecisionAt {
+                    (Text("Last decision received ") + Text(last, style: .relative) + Text(" ago"))
+                } else {
+                    Text("No decisions yet")
+                }
+            } header: {
+                Text("Hook status")
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Claude")
+    }
+}
+
+struct FansSettings: View {
+    @ObservedObject private var fans = FanManager.shared
+    @State private var working = false
+
+    var body: some View {
+        Form {
+            Section {
+                Defaults.Toggle(key: .showFansTab) { Text("Show Fans tab") }
+            } header: {
+                Text("Fans")
+            }
+
+            Section {
+                HStack {
+                    Text(fans.daemonInstalled ? "Fan daemon installed" : "Fan daemon not installed")
+                    Spacer()
+                    if fans.daemonInstalled {
+                        Button("Uninstall", role: .destructive) { run { await fans.uninstallDaemon() } }
+                    } else {
+                        Button("Enable") { run { await fans.installDaemon() } }
+                    }
+                }
+                .disabled(working)
+                if let message = fans.errorMessage {
+                    Text(message).font(.caption).foregroundStyle(.orange)
+                }
+            } header: {
+                Text("Fan control")
+            } footer: {
+                Text("Enabling asks for an administrator password once to install a small root daemon. Fans return to automatic control when the app quits.")
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Fans")
+        .task { await fans.refreshInstalled() }
+    }
+
+    private func run(_ action: @escaping () async -> Void) {
+        working = true
+        Task {
+            await action()
+            working = false
+        }
     }
 }
 

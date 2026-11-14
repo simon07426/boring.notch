@@ -162,6 +162,13 @@ extension Defaults.Keys {
     // Option key modifier behaviour for media keys
     static let optionKeyAction = Key<OptionKeyAction>("optionKeyAction", default: OptionKeyAction.openSettings)
     
+    // MARK: Claude & Fans
+    static let showClaudeTab = Key<Bool>("showClaudeTab", default: true)
+    static let showFansTab = Key<Bool>("showFansTab", default: true)
+    static let claudeDecisionPopup = Key<Bool>("claudeDecisionPopup", default: true)
+    static let claudePopupWhenFrontmost = Key<Bool>("claudePopupWhenFrontmost", default: false)
+    static let fanSensorsExpanded = Key<Bool>("fanSensorsExpanded", default: false)
+
     // MARK: Shelf
     static let boringShelf = Key<Bool>("boringShelf", default: true)
     static let openShelfByDefault = Key<Bool>("openShelfByDefault", default: true)

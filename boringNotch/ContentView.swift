@@ -23,6 +23,8 @@ struct ContentView: View {
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var brightnessManager = BrightnessManager.shared
     @ObservedObject var volumeManager = VolumeManager.shared
+    @ObservedObject var decisionManager = ClaudeDecisionManager.shared
+    @State private var decisionSentHold: Bool = false
     @State private var hoverTask: Task<Void, Never>?
     @State private var isHovering: Bool = false
     @State private var anyDropDebounceTask: Task<Void, Never>?
@@ -39,6 +41,20 @@ struct ContentView: View {
 
     // Shared interactive spring for movement/resizing to avoid conflicting animations
     private let animationSpring = Animation.interactiveSpring(response: 0.38, dampingFraction: 0.8, blendDuration: 0)
+
+    /// False while sharing is in progress or a Claude decision is waiting for an answer.
+    private var canAutoClose: Bool {
+        !SharingStateManager.shared.preventNotchClose && decisionManager.current == nil && !decisionSentHold
+    }
+
+    /// Only one notch window reacts to a decision: the screen with a notch, else the main screen.
+    private var isDecisionTargetScreen: Bool {
+        // A lone notch window always shows the pop-up, wherever it lives.
+        if NSApp.windows.filter({ $0 is BoringNotchWindow }).count <= 1 { return true }
+        let target = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main
+        guard let target, let uuid = vm.screenUUID else { return true }
+        return NSScreen.screen(withUUID: uuid) == target
+    }
 
     private let extendedHoverPadding: CGFloat = 30
     private let zeroHeightHoverPadding: CGFloat = 10
@@ -118,7 +134,7 @@ struct ContentView: View {
                     )
                 
                 mainLayout
-                    .frame(height: vm.notchState == .open ? vm.notchSize.height : nil)
+                    .frame(height: vm.notchState == .open ? vm.notchSize.height : nil, alignment: .top)
                     .conditionalModifier(true) { view in
                         let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
                         let closeAnimation = Animation.spring(response: 0.45, dampingFraction: 1.0, blendDuration: 0)
@@ -153,11 +169,22 @@ struct ContentView: View {
                                 try? await Task.sleep(for: .milliseconds(100))
                                 guard !Task.isCancelled else { return }
                                 await MainActor.run {
-                                    if self.vm.notchState == .open && !self.isHovering && !self.vm.isBatteryPopoverActive && !SharingStateManager.shared.preventNotchClose {
+                                    if self.vm.notchState == .open && !self.isHovering && !self.vm.isBatteryPopoverActive && canAutoClose {
                                         self.vm.close()
                                     }
                                 }
                             }
+                        }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .claudeDecisionArrived)) { _ in
+                        guard isDecisionTargetScreen else { return }
+                        if vm.notchState == .closed && Defaults[.enableHaptics] { haptics.toggle() }
+                        doOpen()
+                    }
+                    .onChange(of: decisionManager.current) { _, new in
+                        // Answered in Claude / withdrawn elsewhere: let the notch close like a normal hover-exit.
+                        if new == nil, !decisionSentHold, !isHovering, vm.notchState == .open, canAutoClose {
+                            vm.close()
                         }
                     }
                     .onChange(of: vm.notchState) { _, newState in
@@ -168,13 +195,13 @@ struct ContentView: View {
                         }
                     }
                     .onChange(of: vm.isBatteryPopoverActive) {
-                        if !vm.isBatteryPopoverActive && !isHovering && vm.notchState == .open && !SharingStateManager.shared.preventNotchClose {
+                        if !vm.isBatteryPopoverActive && !isHovering && vm.notchState == .open && canAutoClose {
                             hoverTask?.cancel()
                             hoverTask = Task {
                                 try? await Task.sleep(for: .milliseconds(100))
                                 guard !Task.isCancelled else { return }
                                 await MainActor.run {
-                                    if !self.vm.isBatteryPopoverActive && !self.isHovering && self.vm.notchState == .open && !SharingStateManager.shared.preventNotchClose {
+                                    if !self.vm.isBatteryPopoverActive && !self.isHovering && self.vm.notchState == .open && canAutoClose {
                                         self.vm.close()
                                     }
                                 }
@@ -235,7 +262,7 @@ struct ContentView: View {
                 }
 
                 vm.dropEvent = false
-                if !SharingStateManager.shared.preventNotchClose {
+                if canAutoClose {
                     vm.close()
                 }
             }
@@ -344,11 +371,21 @@ struct ContentView: View {
               .zIndex(2)
             if vm.notchState == .open {
                 VStack {
+                    if decisionManager.current != nil || decisionSentHold {
+                        ClaudeDecisionHost(holdSent: $decisionSentHold) {
+                            if !isHovering { vm.close() }
+                        }
+                    } else {
                     switch coordinator.currentView {
                     case .home:
                         NotchHomeView(albumArtNamespace: albumArtNamespace)
                     case .shelf:
                         ShelfView()
+                    case .claude:
+                        ClaudeUsageView()
+                    case .fans:
+                        FansView()
+                    }
                     }
                 }
                 .transition(
@@ -549,7 +586,7 @@ struct ContentView: View {
                         self.isHovering = false
                     }
                     
-                    if self.vm.notchState == .open && !self.vm.isBatteryPopoverActive && !SharingStateManager.shared.preventNotchClose {
+                    if self.vm.notchState == .open && !self.vm.isBatteryPopoverActive && canAutoClose {
                         self.vm.close()
                     }
                 }
@@ -599,7 +636,7 @@ struct ContentView: View {
             withAnimation(animationSpring) {
                 isHovering = false
             }
-            if !SharingStateManager.shared.preventNotchClose { 
+            if canAutoClose { 
                 gestureProgress = .zero
                 vm.close()
             }

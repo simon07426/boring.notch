@@ -1,6 +1,7 @@
 import Foundation
 import Cocoa
 import AsyncXPCConnection
+import NotchExtrasCore
 
 final class XPCHelperClient: NSObject {
     nonisolated static let shared = XPCHelperClient()
@@ -241,6 +242,133 @@ final class XPCHelperClient: NSObject {
             return false
         }
     }
+
+    nonisolated func fetchClaudeUsage() async -> Result<Data, UsageFetchError> {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            let result: Result<Data, UsageFetchError> = try await service.withContinuation { service, continuation in
+                service.fetchClaudeUsage { data, errorCode in
+                    if let data {
+                        continuation.resume(returning: .success(data))
+                    } else {
+                        continuation.resume(returning: .failure(errorCode.flatMap(UsageFetchError.init(rawValue:)) ?? .badResponse))
+                    }
+                }
+            }
+            return result
+        } catch {
+            return .failure(.network)
+        }
+    }
+
+    nonisolated func readSensors() async -> [SensorReading] {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            let data: Data? = try await service.withContinuation { service, continuation in
+                service.readSensors { data in
+                    continuation.resume(returning: data)
+                }
+            }
+            guard let data else { return [] }
+            return (try? JSONDecoder().decode([SensorReading].self, from: data)) ?? []
+        } catch {
+            return []
+        }
+    }
+
+    // MARK: - Fan daemon
+
+    nonisolated func fanCommand(_ line: String) async -> String? {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            return try await service.withContinuation { service, continuation in
+                service.fanCommand(line) { reply in
+                    continuation.resume(returning: reply)
+                }
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    nonisolated func isFanDaemonInstalled() async -> Bool {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            return try await service.withContinuation { service, continuation in
+                service.isFanDaemonInstalled { installed in
+                    continuation.resume(returning: installed)
+                }
+            }
+        } catch {
+            return false
+        }
+    }
+
+    nonisolated func installFanDaemon() async -> Result<Void, FanInstallError> {
+        guard let resources = Bundle.main.resourcePath else {
+            return .failure(FanInstallError(message: "App resources not found"))
+        }
+        return await runFanInstall { service, done in service.installFanDaemon(resources, with: done) }
+    }
+
+    nonisolated func uninstallFanDaemon() async -> Result<Void, FanInstallError> {
+        await runFanInstall { service, done in service.uninstallFanDaemon(with: done) }
+    }
+
+    private nonisolated func runFanInstall(
+        _ call: @escaping (BoringNotchXPCHelperProtocol, @escaping (Bool, String?) -> Void) -> Void
+    ) async -> Result<Void, FanInstallError> {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            return try await service.withContinuation { service, continuation in
+                call(service) { ok, message in
+                    continuation.resume(returning: ok ? .success(()) : .failure(FanInstallError(message: message ?? "Operation failed")))
+                }
+            }
+        } catch {
+            return .failure(FanInstallError(message: "Helper unavailable"))
+        }
+    }
+
+    nonisolated func writeClaudeBridgeFile(_ json: Data) async -> Bool {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            return try await service.withContinuation { service, continuation in
+                service.writeClaudeBridgeFile(json) { ok in
+                    continuation.resume(returning: ok)
+                }
+            }
+        } catch {
+            return false
+        }
+    }
+
+    nonisolated func removeClaudeBridgeFile() async -> Bool {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            return try await service.withContinuation { service, continuation in
+                service.removeClaudeBridgeFile { ok in
+                    continuation.resume(returning: ok)
+                }
+            }
+        } catch {
+            return false
+        }
+    }
 }
 
 extension Notification.Name {
@@ -248,3 +376,7 @@ extension Notification.Name {
 }
 
 
+
+struct FanInstallError: Error {
+    let message: String
+}

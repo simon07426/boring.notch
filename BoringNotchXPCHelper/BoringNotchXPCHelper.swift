@@ -9,6 +9,7 @@ import Foundation
 import ApplicationServices
 import IOKit
 import CoreGraphics
+import NotchExtrasCore
 
 class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
     
@@ -99,6 +100,120 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
     @objc func setKeyboardBrightness(_ value: Float, with reply: @escaping (Bool) -> Void) {
         reply(Self.keyboardClient.setBrightness(value))
     }
+    // MARK: - Claude usage
+
+    @objc func fetchClaudeUsage(with reply: @escaping (Data?, String?) -> Void) {
+        Task {
+            switch await ClaudeUsageFetcher.fetch() {
+            case .success(let data): reply(data, nil)
+            case .failure(let error): reply(nil, error.rawValue)
+            }
+        }
+    }
+
+    // MARK: - Temperature sensors
+
+    @objc func readSensors(with reply: @escaping (Data?) -> Void) {
+        reply(try? JSONEncoder().encode(SensorReader.read()))
+    }
+
+    // MARK: - Fan daemon
+
+    @objc func fanCommand(_ line: String, with reply: @escaping (String?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            reply(FanDaemonClient.send(line))
+        }
+    }
+
+    @objc func isFanDaemonInstalled(with reply: @escaping (Bool) -> Void) {
+        reply(FanDaemonInstaller.isInstalled())
+    }
+
+    @objc func installFanDaemon(_ resourcesPath: String, with reply: @escaping (Bool, String?) -> Void) {
+        switch FanDaemonInstaller.installScript(resourcesPath: resourcesPath, uid: getuid()) {
+        case .failure(let error):
+            reply(false, error.message)
+        case .success(let script):
+            // Blocks while the user types the admin password, so keep it off the main thread.
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = FanDaemonInstaller.runPrivileged(script)
+                reply(result.ok, result.message)
+            }
+        }
+    }
+
+    @objc func uninstallFanDaemon(with reply: @escaping (Bool, String?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Best effort: return the fans to auto before the daemon goes away.
+            _ = FanDaemonClient.send("auto")
+            let result = FanDaemonInstaller.runPrivileged(FanDaemonInstaller.uninstallScript())
+            reply(result.ok, result.message)
+        }
+    }
+
+    // MARK: - Claude bridge file (fixed path, outside the app sandbox container)
+
+    private static var bridgeDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/boring-notch", isDirectory: true)
+    }
+
+    private static var bridgeFile: URL {
+        bridgeDirectory.appendingPathComponent("claude-bridge.json")
+    }
+
+    /// Returns true when `dir` is a real directory (not a symlink) owned by the current user.
+    private static func isOwnDirectory(_ path: String) -> Bool {
+        var st = stat()
+        return lstat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFDIR && st.st_uid == getuid()
+    }
+
+    @objc func writeClaudeBridgeFile(_ json: Data, with reply: @escaping (Bool) -> Void) {
+        let dir = Self.bridgeDirectory.path
+        let final = Self.bridgeFile.path
+        var st = stat()
+
+        if lstat(dir, &st) == 0 {
+            // Exists: refuse symlinks and directories we do not own.
+            guard Self.isOwnDirectory(dir) else { return reply(false) }
+        } else {
+            guard errno == ENOENT else { return reply(false) }
+            do {
+                try FileManager.default.createDirectory(
+                    atPath: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            } catch { return reply(false) }
+            guard Self.isOwnDirectory(dir) else { return reply(false) }
+        }
+        _ = chmod(dir, 0o700)
+
+        let tmp = dir + "/.claude-bridge.json.\(UUID().uuidString).tmp"
+        let fd = open(tmp, O_CREAT | O_EXCL | O_NOFOLLOW | O_WRONLY, 0o600)
+        guard fd >= 0 else { return reply(false) }
+
+        var ok = json.withUnsafeBytes { buf -> Bool in
+            var offset = 0
+            while offset < buf.count {
+                let n = write(fd, buf.baseAddress! + offset, buf.count - offset)
+                if n <= 0 { return false }
+                offset += n
+            }
+            return true
+        }
+        ok = ok && fsync(fd) == 0
+        close(fd)
+        ok = ok && rename(tmp, final) == 0
+        if !ok { unlink(tmp) }
+        reply(ok)
+    }
+
+    @objc func removeClaudeBridgeFile(with reply: @escaping (Bool) -> Void) {
+        let path = Self.bridgeFile.path
+        var st = stat()
+        guard lstat(path, &st) == 0 else { return reply(errno == ENOENT) }
+        guard (st.st_mode & S_IFMT) == S_IFREG else { return reply(false) }
+        reply(unlink(path) == 0)
+    }
+
     // MARK: - Screen Brightness (moved from client app into helper)
 
     @objc func isScreenBrightnessAvailable(with reply: @escaping (Bool) -> Void) {
