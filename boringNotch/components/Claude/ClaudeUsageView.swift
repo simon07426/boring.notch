@@ -5,11 +5,14 @@ struct ClaudeUsageView: View {
     @ObservedObject private var manager = ClaudeUsageManager.shared
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 30)) { context in
-            content(now: context.date)
+        ScrollView(.vertical, showsIndicators: false) {
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                content(now: context.date)
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task { await manager.refresh() }
     }
 

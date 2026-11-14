@@ -32,7 +32,7 @@ struct ClaudeDecisionHost: View {
             }
         }
         .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { shown = manager.current }
         .onChange(of: manager.current) { _, new in if !holdSent { shown = new } }
     }

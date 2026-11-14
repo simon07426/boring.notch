@@ -10,22 +10,25 @@ struct FansView: View {
     @FocusState private var fieldFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            header
-            if manager.daemonInstalled, let fans = manager.status?.fans, !fans.isEmpty {
-                controls(fans)
-            } else if !manager.daemonInstalled {
-                enableRow
-            } else {
-                Text("Loading…").font(.subheadline).foregroundStyle(.gray)
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                header
+                if manager.daemonInstalled, let fans = manager.status?.fans, !fans.isEmpty {
+                    controls(fans)
+                } else if !manager.daemonInstalled {
+                    enableRow
+                } else {
+                    Text("Loading…").font(.subheadline).foregroundStyle(.gray)
+                }
+                temperatures
+                if let message = manager.errorMessage {
+                    Text(message).font(.caption).foregroundStyle(.orange).lineLimit(2)
+                }
             }
-            temperatures
-            if let message = manager.errorMessage {
-                Text(message).font(.caption).foregroundStyle(.orange).lineLimit(2)
-            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { manager.startPolling() }
         .onDisappear { manager.stopPolling() }
     }
