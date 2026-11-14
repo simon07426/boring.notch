@@ -30,6 +30,8 @@ final class FanManager: ObservableObject {
     private var lastSetAt = Date.distantPast
     private var isInstalling = false
     private var installedMisses = 0
+    /// Bumped by every setSpeed so a late `auto` reply can tell it was superseded.
+    private var speedGeneration = 0
     /// Daemon client times out at 8 s; give up on a hung command just after.
     private static let commandTimeout: TimeInterval = 9
 
@@ -98,6 +100,7 @@ final class FanManager: ObservableObject {
     func setSpeed(_ rpm: Double) {
         guard daemonInstalled, rpm.isFinite else { return }
         let target = rpm.rounded()
+        speedGeneration += 1
         manualTarget = target
         lastSetAt = Date()
         startHeartbeat()
@@ -116,10 +119,14 @@ final class FanManager: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             // Manual state and heartbeat stay until the daemon confirms; retry once on failure.
+            let generation = self.speedGeneration
             var reply = await self.send("auto")
-            if reply == nil { reply = await self.send("auto") }
-            if reply != nil { self.clearManual() }
+            if reply == nil, generation == self.speedGeneration { reply = await self.send("auto") }
+            if reply != nil, generation == self.speedGeneration { self.clearManual() }
+            // A status refresh would clear the error of a failed auto; keep it.
+            let failure = reply == nil ? self.errorMessage : nil
             await self.refreshStatus()
+            if let failure { self.errorMessage = failure }
         }
     }
 
@@ -226,10 +233,13 @@ final class FanManager: ObservableObject {
     private nonisolated static func fanCommandWithTimeout(_ line: String, seconds: TimeInterval) async -> String? {
         await withCheckedContinuation { continuation in
             let gate = ResumeOnce(continuation)
-            Task.detached { gate.resume(await XPCHelperClient.shared.fanCommand(line)) }
-            Task.detached {
+            let sleeper = Task.detached {
                 try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 gate.resume(nil)
+            }
+            Task.detached {
+                gate.resume(await XPCHelperClient.shared.fanCommand(line))
+                sleeper.cancel()
             }
         }
     }
