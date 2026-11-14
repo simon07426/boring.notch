@@ -9,23 +9,30 @@ import Defaults
 import SwiftUI
 
 struct TabModel: Identifiable {
-    let id = UUID()
+    var id: NotchViews { view }
     let label: String
     let icon: String
     let view: NotchViews
 }
 
-var visibleTabs: [TabModel] {
+func makeVisibleTabs(shelf: Bool, claude: Bool, fans: Bool) -> [TabModel] {
     var tabs = [TabModel(label: "Home", icon: "house.fill", view: .home)]
-    if Defaults[.boringShelf] { tabs.append(TabModel(label: "Shelf", icon: "tray.fill", view: .shelf)) }
-    if Defaults[.showClaudeTab] { tabs.append(TabModel(label: "Claude", icon: "sparkle", view: .claude)) }
-    if Defaults[.showFansTab] { tabs.append(TabModel(label: "Fans", icon: "fan", view: .fans)) }
+    if shelf { tabs.append(TabModel(label: "Shelf", icon: "tray.fill", view: .shelf)) }
+    if claude { tabs.append(TabModel(label: "Claude", icon: "sparkle", view: .claude)) }
+    if fans { tabs.append(TabModel(label: "Fans", icon: "fan", view: .fans)) }
     return tabs
 }
 
 struct TabSelectionView: View {
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     @Namespace var animation
+    @Default(.boringShelf) private var shelfEnabled
+    @Default(.showClaudeTab) private var showClaudeTab
+    @Default(.showFansTab) private var showFansTab
+
+    private var visibleTabs: [TabModel] {
+        makeVisibleTabs(shelf: shelfEnabled, claude: showClaudeTab, fans: showFansTab)
+    }
     var body: some View {
         HStack(spacing: 0) {
             ForEach(visibleTabs) { tab in
@@ -52,9 +59,9 @@ struct TabSelectionView: View {
         }
         .clipShape(Capsule())
         .onAppear { fallBackIfHidden() }
-        .onChange(of: Defaults[.showClaudeTab]) { fallBackIfHidden() }
-        .onChange(of: Defaults[.showFansTab]) { fallBackIfHidden() }
-        .onChange(of: Defaults[.boringShelf]) { fallBackIfHidden() }
+        .onChange(of: showClaudeTab) { fallBackIfHidden() }
+        .onChange(of: showFansTab) { fallBackIfHidden() }
+        .onChange(of: shelfEnabled) { fallBackIfHidden() }
     }
 
     private func fallBackIfHidden() {
