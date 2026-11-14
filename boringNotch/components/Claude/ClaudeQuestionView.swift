@@ -12,6 +12,7 @@ struct ClaudeQuestionView: View {
     @State private var index = 0
     @State private var answers: [String: String] = [:]
     @State private var picked: Set<String> = []
+    @State private var armed = false
 
     private var question: DecisionQuestion { questions[min(index, questions.count - 1)] }
     private var isLast: Bool { index >= questions.count - 1 }
@@ -36,7 +37,10 @@ struct ClaudeQuestionView: View {
                 }
             }
             .controlSize(.small)
+            .disabled(!armed)
+            .opacity(armed ? 1 : ClaudeDecisionClickGuard.disabledOpacity)
         }
+        .task(id: decision.id) { await ClaudeDecisionClickGuard.arm($armed) }
     }
 
     private var optionList: some View {
@@ -45,6 +49,8 @@ struct ClaudeQuestionView: View {
                 optionRow(option)
             }
         }
+        .disabled(!armed)
+        .opacity(armed ? 1 : ClaudeDecisionClickGuard.disabledOpacity)
     }
 
     private func optionRow(_ option: DecisionQuestion.Option) -> some View {

@@ -74,12 +74,29 @@ struct ClaudeDecisionHeader: View {
     }
 }
 
+/// The notch auto-expands under the cursor, so a click meant for something else could land on Allow.
+/// Every action stays disabled (and dimmed) for `delay` after a decision is first shown.
+enum ClaudeDecisionClickGuard {
+    static let delay: Duration = .milliseconds(800)
+    static let disabledOpacity = 0.5
+
+    /// Run as `.task(id: decision.id)`: re-arms the guard whenever the displayed decision changes.
+    @MainActor
+    static func arm(_ armed: Binding<Bool>) async {
+        armed.wrappedValue = false
+        try? await Task.sleep(for: delay)
+        if !Task.isCancelled { armed.wrappedValue = true }
+    }
+}
+
 struct ClaudePermissionView: View {
     let decision: PendingDecision
     let queuedCount: Int
     let onAllow: () -> Void
     let onDeny: () -> Void
     let onHandBack: () -> Void
+
+    @State private var armed = false
 
     var body: some View {
         let r = decision.request
@@ -90,7 +107,10 @@ struct ClaudePermissionView: View {
                 ScrollView(.vertical, showsIndicators: false) { permissionText(r) }
             }
             buttonRow
+                .disabled(!armed)
+                .opacity(armed ? 1 : ClaudeDecisionClickGuard.disabledOpacity)
         }
+        .task(id: decision.id) { await ClaudeDecisionClickGuard.arm($armed) }
     }
 
     private func permissionText(_ r: DecisionRequest) -> some View {
@@ -98,12 +118,12 @@ struct ClaudePermissionView: View {
             Text(r.command == nil ? r.question : "Allow running:")
                 .font(.subheadline).foregroundStyle(.white)
             if let command = r.command {
+                // The full command, never truncated: it is what gets allowed. Long ones scroll above the buttons.
                 Text(command)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.white)
-                    .lineLimit(3)
-                    .truncationMode(.middle)
-                    .help(command)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
                     .padding(6)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
