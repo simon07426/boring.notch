@@ -50,5 +50,22 @@ final class ClaudeUsageTests: XCTestCase {
         XCTAssertEqual(resetText(now.addingTimeInterval(40*60), now: now, calendar: cal), "resets in 40m")
         XCTAssertEqual(resetText(now.addingTimeInterval(5*86400 + 9*3600), now: now, calendar: cal), "resets Tue 09:00")
         XCTAssertEqual(resetText(nil, now: now, calendar: cal), "")
+        XCTAssertEqual(resetText(now, now: now, calendar: cal), "reset")
+        XCTAssertEqual(resetText(now.addingTimeInterval(-3600), now: now, calendar: cal), "reset")
+    }
+
+    func testPercentAfterReset() {
+        let now = Date(timeIntervalSince1970: 1000)
+        XCTAssertEqual(UsageBucket(percent: 75, resetsAt: now.addingTimeInterval(-1)).percent(at: now), 0)
+        XCTAssertEqual(UsageBucket(percent: 75, resetsAt: now.addingTimeInterval(60)).percent(at: now), 75)
+        XCTAssertEqual(UsageBucket(percent: 75, resetsAt: nil).percent(at: now), 75)
+    }
+
+    func testUpdatedAgoText() {
+        let now = Date(timeIntervalSince1970: 100_000)
+        XCTAssertEqual(updatedAgoText(now.addingTimeInterval(-30), now: now), "just now")
+        XCTAssertEqual(updatedAgoText(now.addingTimeInterval(-59 * 60), now: now), "59m ago")
+        XCTAssertEqual(updatedAgoText(now.addingTimeInterval(-889 * 60), now: now), "14h ago")
+        XCTAssertEqual(updatedAgoText(now.addingTimeInterval(-50 * 3600), now: now), "2d ago")
     }
 }

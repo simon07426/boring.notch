@@ -9,6 +9,13 @@ public struct UsageBucket: Equatable {
         self.percent = percent
         self.resetsAt = resetsAt
     }
+
+    /// Utilization as of `now`: once the window's reset time has passed, the stored
+    /// figure is from the previous window, so the current one starts at 0.
+    public func percent(at now: Date) -> Double {
+        if let resetsAt, resetsAt <= now { return 0 }
+        return percent
+    }
 }
 
 public struct UsageSnapshot: Equatable {
@@ -91,6 +98,7 @@ public enum UsageLevel {
 public func resetText(_ date: Date?, now: Date, calendar: Calendar = .current) -> String {
     guard let date else { return "" }
     let interval = date.timeIntervalSince(now)
+    if interval <= 0 { return "reset" }
     if interval < 24 * 3600 {
         let totalMinutes = max(0, Int(interval / 60))
         let hours = totalMinutes / 60
@@ -103,4 +111,14 @@ public func resetText(_ date: Date?, now: Date, calendar: Calendar = .current) -
     formatter.timeZone = calendar.timeZone
     formatter.dateFormat = "EEE HH:mm"
     return "resets \(formatter.string(from: date))"
+}
+
+/// "just now", "12m ago", "14h ago", "2d ago".
+public func updatedAgoText(_ date: Date, now: Date) -> String {
+    let minutes = Int(max(0, now.timeIntervalSince(date)) / 60)
+    if minutes < 1 { return "just now" }
+    if minutes < 60 { return "\(minutes)m ago" }
+    let hours = minutes / 60
+    if hours < 24 { return "\(hours)h ago" }
+    return "\(hours / 24)d ago"
 }

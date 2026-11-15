@@ -23,7 +23,8 @@ struct ClaudeUsageView: View {
         VStack(alignment: .leading, spacing: 10) {
             header(now: now)
             if let snapshot = manager.snapshot {
-                let stale = manager.error == .network || manager.error == .badResponse
+                // Any failed refresh means these figures are the last good ones, not current.
+                let stale = manager.error != nil
                 VStack(alignment: .leading, spacing: 8) {
                     if let b = snapshot.fiveHour { row("5-hour", b, now: now, small: false) }
                     if let b = snapshot.weekly { row("Weekly", b, now: now, small: false) }
@@ -44,7 +45,7 @@ struct ClaudeUsageView: View {
             Text("Claude usage").font(.headline).foregroundStyle(.white)
             Spacer()
             if let updated = manager.lastUpdated {
-                Text("updated \(ago(updated, now: now))").font(.caption).foregroundStyle(.gray)
+                Text("updated \(updatedAgoText(updated, now: now))").font(.caption).foregroundStyle(.gray)
             }
             Button {
                 Task { await manager.refresh() }
@@ -56,7 +57,8 @@ struct ClaudeUsageView: View {
     }
 
     private func row(_ title: String, _ bucket: UsageBucket, now: Date, small: Bool) -> some View {
-        let color = color(for: UsageLevel.of(bucket.percent))
+        let percent = bucket.percent(at: now)
+        let color = color(for: UsageLevel.of(percent))
         return HStack(spacing: 8) {
             Text(title)
                 .frame(width: 90, alignment: .leading)
@@ -65,11 +67,11 @@ struct ClaudeUsageView: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.white.opacity(0.15))
                     Capsule().fill(color)
-                        .frame(width: geo.size.width * min(max(bucket.percent, 0), 100) / 100)
+                        .frame(width: geo.size.width * min(max(percent, 0), 100) / 100)
                 }
             }
             .frame(height: small ? 5 : 8)
-            Text("\(Int(bucket.percent.rounded()))%")
+            Text("\(Int(percent.rounded()))%")
                 .monospacedDigit()
                 .frame(width: 40, alignment: .trailing)
                 .foregroundStyle(color)
@@ -105,10 +107,5 @@ struct ClaudeUsageView: View {
         case .warning: return .orange
         case .critical: return .red
         }
-    }
-
-    private func ago(_ date: Date, now: Date) -> String {
-        let minutes = Int(max(0, now.timeIntervalSince(date)) / 60)
-        return minutes < 1 ? "just now" : "\(minutes)m ago"
     }
 }
