@@ -17,7 +17,12 @@ final class ClaudeUsageManager: ObservableObject {
     private let interval: TimeInterval = 300
     private var gate = UsageRefreshGate()
 
-    private init() {}
+    private init() {
+        if let cached = UsageCache.load() {
+            snapshot = cached.snapshot
+            lastUpdated = cached.updated
+        }
+    }
 
     func start() {
         guard timer == nil else { return }
@@ -43,7 +48,9 @@ final class ClaudeUsageManager: ObservableObject {
         case .success(let data):
             do {
                 snapshot = try UsageSnapshot.parse(data)
-                lastUpdated = Date()
+                let now = Date()
+                lastUpdated = now
+                UsageCache.save(data, at: now)
                 error = nil
                 gate.recordSuccess()
                 retryAt = nil

@@ -159,3 +159,32 @@ public struct UsageRefreshGate {
         retryAt = nil
     }
 }
+
+/// Keeps the last successful usage response so the tab has numbers after a restart or while
+/// Anthropic is rate-limiting. Stores only the usage JSON and its time, never credentials.
+public enum UsageCache {
+    static let dataKey = "claudeUsage.lastData"
+    static let dateKey = "claudeUsage.lastUpdated"
+
+    public static func save(_ data: Data, at date: Date, to defaults: UserDefaults = .standard) {
+        defaults.set(data, forKey: dataKey)
+        defaults.set(date, forKey: dateKey)
+    }
+
+    public static func load(from defaults: UserDefaults = .standard) -> (snapshot: UsageSnapshot, updated: Date)? {
+        guard let data = defaults.data(forKey: dataKey),
+              let date = defaults.object(forKey: dateKey) as? Date,
+              let snapshot = try? UsageSnapshot.parse(data) else { return nil }
+        return (snapshot, date)
+    }
+}
+
+/// "as of 14:40" for today, otherwise "as of Fri 19:00".
+public func asOfText(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.calendar = calendar
+    formatter.timeZone = calendar.timeZone
+    formatter.dateFormat = calendar.isDate(date, inSameDayAs: now) ? "HH:mm" : "EEE HH:mm"
+    return "as of \(formatter.string(from: date))"
+}

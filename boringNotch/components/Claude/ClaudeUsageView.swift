@@ -32,7 +32,7 @@ struct ClaudeUsageView: View {
                         row("\(snapshot.weeklyModelName ?? "Model") weekly", b, now: now, small: true)
                     }
                 }
-                .opacity(stale ? 0.4 : 1)
+                .opacity(stale ? 0.75 : 1)
             } else if manager.error == nil {
                 Text("Loading…").font(.subheadline).foregroundStyle(.gray)
             }
@@ -45,7 +45,9 @@ struct ClaudeUsageView: View {
             Text("Claude usage").font(.headline).foregroundStyle(.white)
             Spacer()
             if let updated = manager.lastUpdated {
-                Text("updated \(updatedAgoText(updated, now: now))").font(.caption).foregroundStyle(.gray)
+                // While the last refresh failed, say when these numbers are from.
+                Text(manager.error == nil ? "updated \(updatedAgoText(updated, now: now))" : asOfText(updated, now: now))
+                    .font(.caption).foregroundStyle(.gray)
             }
             Button {
                 Task { await manager.refresh(manual: true) }
@@ -104,9 +106,9 @@ struct ClaudeUsageView: View {
     }
 
     private func rateLimitedText(now: Date) -> String {
-        guard let retryAt = manager.retryAt, retryAt > now else { return "Anthropic is limiting usage checks" }
+        guard let retryAt = manager.retryAt, retryAt > now else { return "Usage checks paused by Anthropic" }
         let minutes = max(1, Int((retryAt.timeIntervalSince(now) / 60).rounded(.up)))
-        return "Anthropic is limiting usage checks — retrying in \(minutes)m"
+        return "Usage checks paused by Anthropic · retrying in \(minutes)m"
     }
 
     private func color(for level: UsageLevel) -> Color {
