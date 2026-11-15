@@ -29,12 +29,19 @@ enum ClaudeUsageFetcher {
         return renewalThrottle.shouldAttempt(now: Date())
     }
 
-    /// Runs `claude auth status`. Claude Code renews and stores its own login while checking it;
-    /// this process never writes the credentials. Returns true when the CLI ran successfully.
+    /// Runs a minimal Claude Code request (see `ClaudeCLI.renewArguments`) from an empty directory.
+    /// Claude Code renews and stores its own login; this process never writes the credentials.
+    /// Returns true when the CLI ran successfully.
     private static func askClaudeCodeToRenew() -> Bool {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        guard let cli = ClaudeCLI.locate(home: home),
-              let outcome = ProcessRunner.run(cli, arguments: ClaudeCLI.renewArguments, timeout: 20)
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser.path
+        guard let cli = ClaudeCLI.locate(home: home) else { return false }
+        let workDir = fm.temporaryDirectory.appendingPathComponent("boringnotch-claude-renew", isDirectory: true)
+        try? fm.removeItem(at: workDir)
+        guard (try? fm.createDirectory(at: workDir, withIntermediateDirectories: true)) != nil else { return false }
+        defer { try? fm.removeItem(at: workDir) }
+        guard let outcome = ProcessRunner.run(cli, arguments: ClaudeCLI.renewArguments, timeout: 30,
+                                              currentDirectory: workDir)
         else { return false }
         return !outcome.timedOut && outcome.status == 0
     }

@@ -27,7 +27,13 @@ final class ClaudeLoginRenewalTests: XCTestCase {
         XCTAssertNil(ClaudeCLI.locate(home: "/Users/a") { _ in false })
     }
 
-    func testRenewArgumentsUseNoModelCall() {
-        XCTAssertEqual(ClaudeCLI.renewArguments, ["auth", "status"])
+    func testRenewArgumentsAreMinimalAndSkipHooks() {
+        XCTAssertEqual(ClaudeCLI.renewArguments, [
+            "-p", "Reply with: ok",
+            "--model", "haiku",
+            "--setting-sources", "project",
+            "--no-session-persistence",
+            "--tools", "",
+        ])
     }
 }

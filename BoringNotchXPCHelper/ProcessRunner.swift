@@ -12,9 +12,11 @@ enum ProcessRunner {
 
     /// `timeout == nil` waits indefinitely. On timeout the process is terminated.
     /// Returns nil when the process could not be launched.
-    static func run(_ executable: String, arguments: [String], timeout: TimeInterval?) -> Outcome? {
+    static func run(_ executable: String, arguments: [String], timeout: TimeInterval?,
+                    currentDirectory: URL? = nil) -> Outcome? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
+        if let currentDirectory { process.currentDirectoryURL = currentDirectory }
         process.arguments = arguments
         process.standardInput = FileHandle.nullDevice
         let outPipe = Pipe()

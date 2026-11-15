@@ -20,8 +20,17 @@ public struct RenewalThrottle {
 /// Finds the Claude Code CLI. Boring Notch never renews the login itself: it runs Claude Code,
 /// which renews and stores its own login, then reads the Keychain again.
 public enum ClaudeCLI {
-    /// `claude auth status` checks the login without a model call, so it costs no usage.
-    public static let renewArguments = ["auth", "status"]
+    /// A one-word Haiku request: Claude Code only renews an expired login when it makes a real
+    /// request (`claude auth status` does not). No tools, no saved session, and only project
+    /// settings, so the user's own hooks (TV bridge, notch decisions) do not run. Run it from an
+    /// empty directory so no project settings apply either.
+    public static let renewArguments = [
+        "-p", "Reply with: ok",
+        "--model", "haiku",
+        "--setting-sources", "project",
+        "--no-session-persistence",
+        "--tools", "",
+    ]
 
     public static func candidates(home: String) -> [String] {
         [
