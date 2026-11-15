@@ -122,3 +122,40 @@ public func updatedAgoText(_ date: Date, now: Date) -> String {
     if hours < 24 { return "\(hours)h ago" }
     return "\(hours / 24)d ago"
 }
+
+/// Decides when the usage tab may call Anthropic. Automatic refreshes (timer, opening the tab)
+/// wait at least `minInterval` since the last call; after a 429 every refresh waits for a
+/// doubling back-off (2 min, 4, 8 … capped at 30 min) that a success resets.
+public struct UsageRefreshGate {
+    public let minInterval: TimeInterval
+    public let firstBackoff: TimeInterval
+    public let maxBackoff: TimeInterval
+    private var lastAttempt: Date?
+    private var strikes = 0
+    public private(set) var retryAt: Date?
+
+    public init(minInterval: TimeInterval = 60, firstBackoff: TimeInterval = 120, maxBackoff: TimeInterval = 1800) {
+        self.minInterval = minInterval
+        self.firstBackoff = firstBackoff
+        self.maxBackoff = maxBackoff
+    }
+
+    /// True (and records the attempt) when a call is allowed now.
+    public mutating func shouldRefresh(now: Date, manual: Bool) -> Bool {
+        if let retryAt, now < retryAt { return false }
+        if !manual, let lastAttempt, now.timeIntervalSince(lastAttempt) < minInterval { return false }
+        lastAttempt = now
+        return true
+    }
+
+    public mutating func recordRateLimited(now: Date) {
+        strikes += 1
+        let delay = min(firstBackoff * pow(2, Double(min(strikes - 1, 10))), maxBackoff)
+        retryAt = now.addingTimeInterval(delay)
+    }
+
+    public mutating func recordSuccess() {
+        strikes = 0
+        retryAt = nil
+    }
+}

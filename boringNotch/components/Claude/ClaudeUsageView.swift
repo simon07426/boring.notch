@@ -36,7 +36,7 @@ struct ClaudeUsageView: View {
             } else if manager.error == nil {
                 Text("Loading…").font(.subheadline).foregroundStyle(.gray)
             }
-            if let error = manager.error { errorView(error) }
+            if let error = manager.error { errorView(error, now: now) }
         }
     }
 
@@ -48,7 +48,7 @@ struct ClaudeUsageView: View {
                 Text("updated \(updatedAgoText(updated, now: now))").font(.caption).foregroundStyle(.gray)
             }
             Button {
-                Task { await manager.refresh() }
+                Task { await manager.refresh(manual: true) }
             } label: {
                 Image(systemName: "arrow.clockwise").foregroundStyle(.gray)
             }
@@ -83,22 +83,30 @@ struct ClaudeUsageView: View {
     }
 
     @ViewBuilder
-    private func errorView(_ error: UsageFetchError) -> some View {
+    private func errorView(_ error: UsageFetchError, now: Date) -> some View {
         switch error {
         case .noCredentials:
             Text("Sign in to Claude Code").font(.caption).foregroundStyle(.orange)
         case .keychainDenied:
             Button {
-                Task { await manager.refresh() }
+                Task { await manager.refresh(manual: true) }
             } label: {
                 Text("Keychain access denied — click to retry").font(.caption).foregroundStyle(.orange)
             }
             .buttonStyle(.plain)
         case .expired:
             Text("Open Claude Code to refresh login").font(.caption).foregroundStyle(.orange)
+        case .rateLimited:
+            Text(rateLimitedText(now: now)).font(.caption).foregroundStyle(.orange)
         case .network, .badResponse:
             Text("Couldn't reach Anthropic").font(.caption).foregroundStyle(.orange)
         }
+    }
+
+    private func rateLimitedText(now: Date) -> String {
+        guard let retryAt = manager.retryAt, retryAt > now else { return "Anthropic is limiting usage checks" }
+        let minutes = max(1, Int((retryAt.timeIntervalSince(now) / 60).rounded(.up)))
+        return "Anthropic is limiting usage checks — retrying in \(minutes)m"
     }
 
     private func color(for level: UsageLevel) -> Color {

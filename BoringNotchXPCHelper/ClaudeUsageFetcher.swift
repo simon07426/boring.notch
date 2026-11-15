@@ -58,6 +58,7 @@ enum ClaudeUsageFetcher {
             switch http.statusCode {
             case 200: return .success(data)
             case 401: return .failure(.expired)
+            case 429: return .failure(.rateLimited)
             default: return .failure(.badResponse)
             }
         } catch {
