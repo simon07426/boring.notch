@@ -36,4 +36,8 @@ final class ClaudeLoginRenewalTests: XCTestCase {
             "--tools", "",
         ])
     }
+
+    func testLoginArgumentsOpenTheBrowserSignIn() {
+        XCTAssertEqual(ClaudeCLI.loginArguments, ["auth", "login"])
+    }
 }

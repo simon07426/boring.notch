@@ -46,6 +46,20 @@ enum ClaudeUsageFetcher {
         return !outcome.timedOut && outcome.status == 0
     }
 
+    /// Runs `claude auth login`, which opens the browser and waits (up to 5 minutes) for the user to
+    /// finish signing in. Claude Code stores the login itself. Returns nil on success, else a message.
+    static func signIn() -> String? {
+        let fm = FileManager.default
+        guard let cli = ClaudeCLI.locate(home: fm.homeDirectoryForCurrentUser.path) else {
+            return "Claude Code isn't installed"
+        }
+        guard let outcome = ProcessRunner.run(cli, arguments: ClaudeCLI.loginArguments, timeout: 300,
+                                              currentDirectory: fm.homeDirectoryForCurrentUser)
+        else { return "Couldn't start Claude Code" }
+        if outcome.timedOut { return "Sign-in timed out" }
+        return outcome.status == 0 ? nil : "Sign-in didn't finish"
+    }
+
     private static func attempt() async -> Result<Data, UsageFetchError> {
         let credentials: ClaudeCredentials
         switch readCredentials() {

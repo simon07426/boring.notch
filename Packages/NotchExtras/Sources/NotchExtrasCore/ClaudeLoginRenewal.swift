@@ -32,6 +32,9 @@ public enum ClaudeCLI {
         "--tools", "",
     ]
 
+    /// Claude Code's own sign-in: opens the browser and waits for the user to finish there.
+    public static let loginArguments = ["auth", "login"]
+
     public static func candidates(home: String) -> [String] {
         [
             home + "/.local/bin/claude",

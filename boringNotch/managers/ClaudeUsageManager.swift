@@ -11,6 +11,10 @@ final class ClaudeUsageManager: ObservableObject {
     @Published private(set) var lastUpdated: Date?
     /// When a rate-limited refresh may be tried again.
     @Published private(set) var retryAt: Date?
+    /// True while Claude Code's browser sign-in is open.
+    @Published private(set) var isSigningIn = false
+    /// Why the last sign-in attempt failed, if it did.
+    @Published private(set) var signInError: String?
 
     private var timer: Timer?
     private var isRefreshing = false
@@ -35,6 +39,17 @@ final class ClaudeUsageManager: ObservableObject {
     func stop() {
         timer?.invalidate()
         timer = nil
+    }
+
+    /// Opens Claude Code's sign-in in the browser, then refreshes once it completes.
+    func signIn() async {
+        guard !isSigningIn else { return }
+        isSigningIn = true
+        signInError = nil
+        let failure = await XPCHelperClient.shared.signInToClaudeCode()
+        isSigningIn = false
+        signInError = failure
+        if failure == nil { await refresh(manual: true) }
     }
 
     /// Keeps the last snapshot when a fetch fails. Automatic refreshes (timer, opening the tab)

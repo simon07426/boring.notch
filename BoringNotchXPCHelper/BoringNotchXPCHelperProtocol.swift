@@ -22,6 +22,8 @@ import Foundation
     func setScreenBrightness(_ value: Float, with reply: @escaping (Bool) -> Void)
     // Claude usage (token is read and used inside the helper only)
     func fetchClaudeUsage(with reply: @escaping (Data?, String?) -> Void)
+    /// Runs Claude Code's browser sign-in; replies when it finishes (true) or fails/times out.
+    func signInToClaudeCode(with reply: @escaping (Bool, String?) -> Void)
 
     // Temperature sensors (JSON-encoded [SensorReading])
     func readSensors(with reply: @escaping (Data?) -> Void)

@@ -88,7 +88,7 @@ struct ClaudeUsageView: View {
     private func errorView(_ error: UsageFetchError, now: Date) -> some View {
         switch error {
         case .noCredentials:
-            Text("Sign in to Claude Code").font(.caption).foregroundStyle(.orange)
+            signInButton
         case .keychainDenied:
             Button {
                 Task { await manager.refresh(manual: true) }
@@ -97,11 +97,36 @@ struct ClaudeUsageView: View {
             }
             .buttonStyle(.plain)
         case .expired:
-            Text("Open Claude Code to refresh login").font(.caption).foregroundStyle(.orange)
+            signInButton
         case .rateLimited:
             Text(rateLimitedText(now: now)).font(.caption).foregroundStyle(.orange)
         case .network, .badResponse:
             Text("Couldn't reach Anthropic").font(.caption).foregroundStyle(.orange)
+        }
+    }
+
+    /// Opens Claude Code's sign-in page in the browser and refreshes when it is done.
+    @ViewBuilder
+    private var signInButton: some View {
+        if manager.isSigningIn {
+            Text("Finish signing in in your browser…").font(.caption).foregroundStyle(.gray)
+        } else {
+            HStack(spacing: 8) {
+                Button {
+                    Task { await manager.signIn() }
+                } label: {
+                    Text("Sign in to Claude Code")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color.orange.opacity(0.25)))
+                        .foregroundStyle(.orange)
+                }
+                .buttonStyle(.plain)
+                if let message = manager.signInError {
+                    Text(message).font(.caption).foregroundStyle(.gray)
+                }
+            }
         }
     }
 
