@@ -111,6 +111,13 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
         }
     }
 
+    @objc func signInToClaudeCode(with reply: @escaping (Bool, String?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = ClaudeUsageFetcher.signIn()
+            reply(result == nil, result)
+        }
+    }
+
     // MARK: - Temperature sensors
 
     @objc func readSensors(with reply: @escaping (Data?) -> Void) {

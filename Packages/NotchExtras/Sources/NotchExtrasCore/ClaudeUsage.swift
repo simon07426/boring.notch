@@ -9,6 +9,13 @@ public struct UsageBucket: Equatable {
         self.percent = percent
         self.resetsAt = resetsAt
     }
+
+    /// Utilization as of `now`: once the window's reset time has passed, the stored
+    /// figure is from the previous window, so the current one starts at 0.
+    public func percent(at now: Date) -> Double {
+        if let resetsAt, resetsAt <= now { return 0 }
+        return percent
+    }
 }
 
 public struct UsageSnapshot: Equatable {
@@ -91,6 +98,7 @@ public enum UsageLevel {
 public func resetText(_ date: Date?, now: Date, calendar: Calendar = .current) -> String {
     guard let date else { return "" }
     let interval = date.timeIntervalSince(now)
+    if interval <= 0 { return "reset" }
     if interval < 24 * 3600 {
         let totalMinutes = max(0, Int(interval / 60))
         let hours = totalMinutes / 60
@@ -103,4 +111,80 @@ public func resetText(_ date: Date?, now: Date, calendar: Calendar = .current) -
     formatter.timeZone = calendar.timeZone
     formatter.dateFormat = "EEE HH:mm"
     return "resets \(formatter.string(from: date))"
+}
+
+/// "just now", "12m ago", "14h ago", "2d ago".
+public func updatedAgoText(_ date: Date, now: Date) -> String {
+    let minutes = Int(max(0, now.timeIntervalSince(date)) / 60)
+    if minutes < 1 { return "just now" }
+    if minutes < 60 { return "\(minutes)m ago" }
+    let hours = minutes / 60
+    if hours < 24 { return "\(hours)h ago" }
+    return "\(hours / 24)d ago"
+}
+
+/// Decides when the usage tab may call Anthropic. Automatic refreshes (timer, opening the tab)
+/// wait at least `minInterval` since the last call; after a 429 every refresh waits for a
+/// doubling back-off (2 min, 4, 8 … capped at 30 min) that a success resets.
+public struct UsageRefreshGate {
+    public let minInterval: TimeInterval
+    public let firstBackoff: TimeInterval
+    public let maxBackoff: TimeInterval
+    private var lastAttempt: Date?
+    private var strikes = 0
+    public private(set) var retryAt: Date?
+
+    public init(minInterval: TimeInterval = 60, firstBackoff: TimeInterval = 120, maxBackoff: TimeInterval = 1800) {
+        self.minInterval = minInterval
+        self.firstBackoff = firstBackoff
+        self.maxBackoff = maxBackoff
+    }
+
+    /// True (and records the attempt) when a call is allowed now.
+    public mutating func shouldRefresh(now: Date, manual: Bool) -> Bool {
+        if let retryAt, now < retryAt { return false }
+        if !manual, let lastAttempt, now.timeIntervalSince(lastAttempt) < minInterval { return false }
+        lastAttempt = now
+        return true
+    }
+
+    public mutating func recordRateLimited(now: Date) {
+        strikes += 1
+        let delay = min(firstBackoff * pow(2, Double(min(strikes - 1, 10))), maxBackoff)
+        retryAt = now.addingTimeInterval(delay)
+    }
+
+    public mutating func recordSuccess() {
+        strikes = 0
+        retryAt = nil
+    }
+}
+
+/// Keeps the last successful usage response so the tab has numbers after a restart or while
+/// Anthropic is rate-limiting. Stores only the usage JSON and its time, never credentials.
+public enum UsageCache {
+    static let dataKey = "claudeUsage.lastData"
+    static let dateKey = "claudeUsage.lastUpdated"
+
+    public static func save(_ data: Data, at date: Date, to defaults: UserDefaults = .standard) {
+        defaults.set(data, forKey: dataKey)
+        defaults.set(date, forKey: dateKey)
+    }
+
+    public static func load(from defaults: UserDefaults = .standard) -> (snapshot: UsageSnapshot, updated: Date)? {
+        guard let data = defaults.data(forKey: dataKey),
+              let date = defaults.object(forKey: dateKey) as? Date,
+              let snapshot = try? UsageSnapshot.parse(data) else { return nil }
+        return (snapshot, date)
+    }
+}
+
+/// "as of 14:40" for today, otherwise "as of Fri 19:00".
+public func asOfText(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.calendar = calendar
+    formatter.timeZone = calendar.timeZone
+    formatter.dateFormat = calendar.isDate(date, inSameDayAs: now) ? "HH:mm" : "EEE HH:mm"
+    return "as of \(formatter.string(from: date))"
 }

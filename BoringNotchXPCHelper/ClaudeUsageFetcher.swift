@@ -13,7 +13,54 @@ enum ClaudeUsageFetcher {
     private static let keychainService = "Claude Code-credentials"
     private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
 
+    private static let renewalLock = NSLock()
+    nonisolated(unsafe) private static var renewalThrottle = RenewalThrottle()
+
+    /// On an expired login, asks Claude Code to renew it (at most every 10 minutes) and retries once.
     static func fetch() async -> Result<Data, UsageFetchError> {
+        let first = await attempt()
+        guard case .failure(.expired) = first, takeRenewalSlot(), askClaudeCodeToRenew() else { return first }
+        return await attempt()
+    }
+
+    private static func takeRenewalSlot() -> Bool {
+        renewalLock.lock()
+        defer { renewalLock.unlock() }
+        return renewalThrottle.shouldAttempt(now: Date())
+    }
+
+    /// Runs a minimal Claude Code request (see `ClaudeCLI.renewArguments`) from an empty directory.
+    /// Claude Code renews and stores its own login; this process never writes the credentials.
+    /// Returns true when the CLI ran successfully.
+    private static func askClaudeCodeToRenew() -> Bool {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser.path
+        guard let cli = ClaudeCLI.locate(home: home) else { return false }
+        let workDir = fm.temporaryDirectory.appendingPathComponent("boringnotch-claude-renew", isDirectory: true)
+        try? fm.removeItem(at: workDir)
+        guard (try? fm.createDirectory(at: workDir, withIntermediateDirectories: true)) != nil else { return false }
+        defer { try? fm.removeItem(at: workDir) }
+        guard let outcome = ProcessRunner.run(cli, arguments: ClaudeCLI.renewArguments, timeout: 30,
+                                              currentDirectory: workDir)
+        else { return false }
+        return !outcome.timedOut && outcome.status == 0
+    }
+
+    /// Runs `claude auth login`, which opens the browser and waits (up to 5 minutes) for the user to
+    /// finish signing in. Claude Code stores the login itself. Returns nil on success, else a message.
+    static func signIn() -> String? {
+        let fm = FileManager.default
+        guard let cli = ClaudeCLI.locate(home: fm.homeDirectoryForCurrentUser.path) else {
+            return "Claude Code isn't installed"
+        }
+        guard let outcome = ProcessRunner.run(cli, arguments: ClaudeCLI.loginArguments, timeout: 300,
+                                              currentDirectory: fm.homeDirectoryForCurrentUser)
+        else { return "Couldn't start Claude Code" }
+        if outcome.timedOut { return "Sign-in timed out" }
+        return outcome.status == 0 ? nil : "Sign-in didn't finish"
+    }
+
+    private static func attempt() async -> Result<Data, UsageFetchError> {
         let credentials: ClaudeCredentials
         switch readCredentials() {
         case .success(let c): credentials = c
@@ -32,6 +79,7 @@ enum ClaudeUsageFetcher {
             switch http.statusCode {
             case 200: return .success(data)
             case 401: return .failure(.expired)
+            case 429: return .failure(.rateLimited)
             default: return .failure(.badResponse)
             }
         } catch {

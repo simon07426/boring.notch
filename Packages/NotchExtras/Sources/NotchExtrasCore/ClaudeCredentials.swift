@@ -1,7 +1,7 @@
 import Foundation
 
 public enum UsageFetchError: String, Error {
-    case noCredentials, keychainDenied, expired, network, badResponse
+    case noCredentials, keychainDenied, expired, network, badResponse, rateLimited
 }
 
 public struct ClaudeCredentials {

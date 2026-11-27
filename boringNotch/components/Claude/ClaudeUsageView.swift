@@ -23,7 +23,8 @@ struct ClaudeUsageView: View {
         VStack(alignment: .leading, spacing: 10) {
             header(now: now)
             if let snapshot = manager.snapshot {
-                let stale = manager.error == .network || manager.error == .badResponse
+                // Any failed refresh means these figures are the last good ones, not current.
+                let stale = manager.error != nil
                 VStack(alignment: .leading, spacing: 8) {
                     if let b = snapshot.fiveHour { row("5-hour", b, now: now, small: false) }
                     if let b = snapshot.weekly { row("Weekly", b, now: now, small: false) }
@@ -31,11 +32,11 @@ struct ClaudeUsageView: View {
                         row("\(snapshot.weeklyModelName ?? "Model") weekly", b, now: now, small: true)
                     }
                 }
-                .opacity(stale ? 0.4 : 1)
+                .opacity(stale ? 0.75 : 1)
             } else if manager.error == nil {
                 Text("Loading…").font(.subheadline).foregroundStyle(.gray)
             }
-            if let error = manager.error { errorView(error) }
+            if let error = manager.error { errorView(error, now: now) }
         }
     }
 
@@ -44,10 +45,12 @@ struct ClaudeUsageView: View {
             Text("Claude usage").font(.headline).foregroundStyle(.white)
             Spacer()
             if let updated = manager.lastUpdated {
-                Text("updated \(ago(updated, now: now))").font(.caption).foregroundStyle(.gray)
+                // While the last refresh failed, say when these numbers are from.
+                Text(manager.error == nil ? "updated \(updatedAgoText(updated, now: now))" : asOfText(updated, now: now))
+                    .font(.caption).foregroundStyle(.gray)
             }
             Button {
-                Task { await manager.refresh() }
+                Task { await manager.refresh(manual: true) }
             } label: {
                 Image(systemName: "arrow.clockwise").foregroundStyle(.gray)
             }
@@ -56,7 +59,8 @@ struct ClaudeUsageView: View {
     }
 
     private func row(_ title: String, _ bucket: UsageBucket, now: Date, small: Bool) -> some View {
-        let color = color(for: UsageLevel.of(bucket.percent))
+        let percent = bucket.percent(at: now)
+        let color = color(for: UsageLevel.of(percent))
         return HStack(spacing: 8) {
             Text(title)
                 .frame(width: 90, alignment: .leading)
@@ -65,11 +69,11 @@ struct ClaudeUsageView: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.white.opacity(0.15))
                     Capsule().fill(color)
-                        .frame(width: geo.size.width * min(max(bucket.percent, 0), 100) / 100)
+                        .frame(width: geo.size.width * min(max(percent, 0), 100) / 100)
                 }
             }
             .frame(height: small ? 5 : 8)
-            Text("\(Int(bucket.percent.rounded()))%")
+            Text("\(Int(percent.rounded()))%")
                 .monospacedDigit()
                 .frame(width: 40, alignment: .trailing)
                 .foregroundStyle(color)
@@ -81,22 +85,55 @@ struct ClaudeUsageView: View {
     }
 
     @ViewBuilder
-    private func errorView(_ error: UsageFetchError) -> some View {
+    private func errorView(_ error: UsageFetchError, now: Date) -> some View {
         switch error {
         case .noCredentials:
-            Text("Sign in to Claude Code").font(.caption).foregroundStyle(.orange)
+            signInButton
         case .keychainDenied:
             Button {
-                Task { await manager.refresh() }
+                Task { await manager.refresh(manual: true) }
             } label: {
                 Text("Keychain access denied — click to retry").font(.caption).foregroundStyle(.orange)
             }
             .buttonStyle(.plain)
         case .expired:
-            Text("Open Claude Code to refresh login").font(.caption).foregroundStyle(.orange)
+            signInButton
+        case .rateLimited:
+            Text(rateLimitedText(now: now)).font(.caption).foregroundStyle(.orange)
         case .network, .badResponse:
             Text("Couldn't reach Anthropic").font(.caption).foregroundStyle(.orange)
         }
+    }
+
+    /// Opens Claude Code's sign-in page in the browser and refreshes when it is done.
+    @ViewBuilder
+    private var signInButton: some View {
+        if manager.isSigningIn {
+            Text("Finish signing in in your browser…").font(.caption).foregroundStyle(.gray)
+        } else {
+            HStack(spacing: 8) {
+                Button {
+                    Task { await manager.signIn() }
+                } label: {
+                    Text("Sign in to Claude Code")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color.orange.opacity(0.25)))
+                        .foregroundStyle(.orange)
+                }
+                .buttonStyle(.plain)
+                if let message = manager.signInError {
+                    Text(message).font(.caption).foregroundStyle(.gray)
+                }
+            }
+        }
+    }
+
+    private func rateLimitedText(now: Date) -> String {
+        guard let retryAt = manager.retryAt, retryAt > now else { return "Usage checks paused by Anthropic" }
+        let minutes = max(1, Int((retryAt.timeIntervalSince(now) / 60).rounded(.up)))
+        return "Usage checks paused by Anthropic · retrying in \(minutes)m"
     }
 
     private func color(for level: UsageLevel) -> Color {
@@ -105,10 +142,5 @@ struct ClaudeUsageView: View {
         case .warning: return .orange
         case .critical: return .red
         }
-    }
-
-    private func ago(_ date: Date, now: Date) -> String {
-        let minutes = Int(max(0, now.timeIntervalSince(date)) / 60)
-        return minutes < 1 ? "just now" : "\(minutes)m ago"
     }
 }

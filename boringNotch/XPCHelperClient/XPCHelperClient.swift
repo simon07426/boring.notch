@@ -263,6 +263,22 @@ final class XPCHelperClient: NSObject {
         }
     }
 
+    /// Nil on success, otherwise a short message for the user.
+    nonisolated func signInToClaudeCode() async -> String? {
+        do {
+            let service = await MainActor.run {
+                ensureRemoteService()
+            }
+            return try await service.withContinuation { service, continuation in
+                service.signInToClaudeCode { ok, message in
+                    continuation.resume(returning: ok ? nil : (message ?? "Sign-in didn't finish"))
+                }
+            }
+        } catch {
+            return "Couldn't reach the helper"
+        }
+    }
+
     nonisolated func readSensors() async -> [SensorReading] {
         do {
             let service = await MainActor.run {
